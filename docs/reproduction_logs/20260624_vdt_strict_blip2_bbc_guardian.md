@@ -63,8 +63,7 @@ target validation dataset size: 81237
 模型文件保存在本地，不提交 GitHub：
 
 ```text
-D:\MY_PROJECT\OOC\ooc_repro_baselines\external\VDT\saved_model\VDTNews.pt
-```
+D:\MY_PROJECT\OOC\ooc_repro_baselines\external\VDT\saved_model\VDTNews.pt`nD:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs128_20ep_bbc_guardian\VDTNews_blip2_strict_bbc_guardian_bs128_best_epoch1.pt`n```
 
 文件大小约 `124.04 MB`，保存时间 `2026-06-24 18:07:38`。
 
@@ -98,3 +97,4 @@ D:\MY_PROJECT\OOC\datasets\check_vdt_blip2_strict_training.ps1
 - 运行另外一个 target domain，用于形成至少 2 组 baseline 结果。
 - 在 E3-VDT 系统侧接入该 baseline 结果展示，但不把 124MB 模型提交 GitHub。
 - 可选：修复 early-stop 逻辑后做 extended run，作为“实现修正/消融实验”，不要混作官方复现。
+
