@@ -63,7 +63,9 @@ target validation dataset size: 81237
 模型文件保存在本地，不提交 GitHub：
 
 ```text
-D:\MY_PROJECT\OOC\ooc_repro_baselines\external\VDT\saved_model\VDTNews.pt`nD:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs128_20ep_bbc_guardian\VDTNews_blip2_strict_bbc_guardian_bs128_best_epoch1.pt`n```
+D:\MY_PROJECT\OOC\ooc_repro_baselines\external\VDT\saved_model\VDTNews.pt
+D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs128_20ep_bbc_guardian\VDTNews_blip2_strict_bbc_guardian_bs128_best_epoch1.pt
+```
 
 文件大小约 `124.04 MB`，保存时间 `2026-06-24 18:07:38`。
 
