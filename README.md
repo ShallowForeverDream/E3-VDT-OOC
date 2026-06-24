@@ -26,6 +26,13 @@ python scripts/check_project.py
 python demo/app.py
 ```
 
+启动后终端会打印实际访问地址，例如 `http://127.0.0.1:7860`。如果 `7860` 被占用，程序会自动尝试 `7861`、`7862` 等后续端口；也可以手动指定：
+
+```powershell
+$env:GRADIO_SERVER_PORT="7861"
+python demo/app.py
+```
+
 命令行推理：
 
 ```bash

@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, sys
+import json, os, socket, sys
 from pathlib import Path
 try:
     import gradio as gr
@@ -37,4 +37,28 @@ def build_app():
         gr.Examples(examples=EXAMPLES, inputs=[image,text,image_context])
         gr.Markdown("## 使用说明\n1. 如果没有图像 caption/OCR，系统会提示证据不足；这是为了避免 demo 假装看懂图片。\n2. 后续接入 BLIP-2/VDT/E3-VDT 后，`image_context` 将由离线缓存或模型自动生成。\n3. 所有模块输出必须遵守 `docs/OUTPUT_SCHEMA.md`。")
     return app
-if __name__ == "__main__": build_app().launch(server_name="127.0.0.1", server_port=7860)
+
+
+def _pick_port() -> int:
+    """Pick a Gradio port that works even when 7860 is already occupied."""
+    explicit = os.environ.get("GRADIO_SERVER_PORT")
+    if explicit:
+        return int(explicit)
+
+    start = int(os.environ.get("GRADIO_SERVER_PORT_BASE", "7860"))
+    host = os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1")
+    for port in range(start, start + 30):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind((host, port))
+            except OSError:
+                continue
+            return port
+    raise RuntimeError(f"Cannot find empty port in range: {start}-{start + 29}")
+
+
+if __name__ == "__main__":
+    host = os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1")
+    port = _pick_port()
+    print(f"[E3-VDT-OOC] launching demo: http://{host}:{port}", flush=True)
+    build_app().launch(server_name=host, server_port=port)
