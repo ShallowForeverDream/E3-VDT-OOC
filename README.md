@@ -48,7 +48,7 @@ python -m e3vdt.inference.cli --text "A protest erupted in Paris on Monday." --i
 5. [`docs/WHAT_TO_SEND_ME.md`](docs/WHAT_TO_SEND_ME.md)：需要提供给组长/集成者的材料格式。
 6. [`docs/OUTPUT_SCHEMA.md`](docs/OUTPUT_SCHEMA.md)：系统输入输出格式，所有模块都按这个对齐。
 7. [`docs/DEMO_CASES.md`](docs/DEMO_CASES.md)：系统测试与答辩演示样例。
-7. [`docs/DEMO_EXAMPLES.md`](docs/DEMO_EXAMPLES.md)：答辩演示时可直接点击/粘贴的样例。
+8. [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md)：VDT baseline 复现进度和指标。
 
 ## 分工
 
@@ -65,6 +65,13 @@ python -m e3vdt.inference.cli --text "A protest erupted in Paris on Monday." --i
 
 ## 当前复现状态
 
-当前组长机器上正在跑 VDT 严格 BLIP-2/GaussianBlur 预处理。路径与复现协议见 [`docs/REPRODUCTION_PROTOCOL.md`](docs/REPRODUCTION_PROTOCOL.md)。
+当前组长机器上已完成一组 VDT strict BLIP-2/GaussianBlur baseline，并已启动第二组 domain 复现：
+
+| 实验 | 状态 | F1 | Acc | AUC |
+|---|---|---:|---:|---:|
+| `bbc,guardian` | completed | 0.7353 | 0.7383 | 0.7398 |
+| `usa_today,washington_post` | running | - | - | - |
+
+详细路径、日志和复现协议见 [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md) 与 [`docs/REPRODUCTION_PROTOCOL.md`](docs/REPRODUCTION_PROTOCOL.md)。网页 demo 的“复现实验指标”标签页也会展示这些结果。
 
 

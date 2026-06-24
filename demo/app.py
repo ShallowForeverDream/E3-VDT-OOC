@@ -31,6 +31,73 @@ def _load_examples():
     ]
 
 EXAMPLES=_load_examples()
+
+
+def _load_reproduction_metrics():
+    path = ROOT / "examples" / "reproduction_metrics.json"
+    if not path.exists():
+        return []
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _format_metric_value(value):
+    if value is None:
+        return "-"
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    return str(value)
+
+
+def _render_reproduction_metrics():
+    rows = _load_reproduction_metrics()
+    if not rows:
+        return "## 复现实验指标\n\n暂无指标文件。"
+
+    lines = [
+        "## VDT strict BLIP-2/GaussianBlur 复现实验指标",
+        "",
+        "这部分用于答辩展示 baseline 复现状态；大模型权重和原始数据不提交 GitHub，只记录可复现配置与指标。",
+        "",
+        "| 实验 | 状态 | target_domain 参数 | F1 | Acc | AUC | 备注 |",
+        "|---|---|---|---:|---:|---:|---|",
+    ]
+    for row in rows:
+        metrics = row.get("metrics") or {}
+        note = row.get("note", "").replace("|", "\\|")
+        lines.append(
+            "| {id} | {status} | `{target}` | {f1} | {acc} | {auc} | {note} |".format(
+                id=row.get("id", "-"),
+                status=row.get("status", "-"),
+                target=row.get("target_domain_arg", "-"),
+                f1=_format_metric_value(metrics.get("f1")),
+                acc=_format_metric_value(metrics.get("acc")),
+                auc=_format_metric_value(metrics.get("auc")),
+                note=note,
+            )
+        )
+
+    completed = [r for r in rows if r.get("metrics")]
+    if completed:
+        best = max(completed, key=lambda r: r["metrics"].get("f1", 0.0))
+        m = best["metrics"]
+        lines += [
+            "",
+            "### 当前可汇报 baseline",
+            "",
+            f"- 实验：`{best['id']}`",
+            f"- F1：**{m.get('f1', 0):.4f}**",
+            f"- Acc：**{m.get('acc', 0):.4f}**",
+            f"- AUC：**{m.get('auc', 0):.4f}**",
+            "",
+            "### 和本项目创新点的关系",
+            "",
+            "- VDT baseline 负责提供严格论文复现的二分类基线。",
+            "- E3-VDT 展示系统进一步输出 `mismatch_type`、`conflict_fields`、`event_scores` 和结构化解释。",
+            "- 因此报告里应把 VDT 作为 baseline，把事件字段归因作为系统创新。"
+        ]
+    return "\n".join(lines)
+
+
 def run_demo(image, text, image_context):
     image_path=image if isinstance(image,str) else None
     obj=pipe.predict(text=text, image_path=image_path, image_context=image_context).to_dict()
@@ -40,19 +107,23 @@ def run_demo(image, text, image_context):
 def build_app():
     with gr.Blocks(title="E3-VDT-OOC") as app:
         gr.Markdown("# E3-VDT-OOC 跨域图文内容挪用检测系统\n输入新闻图片和文本，输出 OOC 判断、错配类型、冲突字段和结构化解释。\n\n> 当前 demo 使用轻量可解释 heuristic pipeline；VDT/E3-VDT 严格模型训练完成后将替换后端推理模块。")
-        with gr.Row():
-            with gr.Column(scale=1):
-                image=gr.Image(label="新闻图片（可选；当前 demo 不直接识图）", type="filepath")
-                text=gr.Textbox(label="新闻文本 / Caption", lines=5, placeholder="输入新闻 caption 或 claim")
-                image_context=gr.Textbox(label="图像上下文（建议填写：图像原始 caption / OCR / 检索证据）", lines=5, placeholder="例如：People gathered in London during an earlier climate demonstration in 2020.")
-                btn=gr.Button("开始检测", variant="primary")
-            with gr.Column(scale=1):
-                summary=gr.Markdown(label="结构化判断")
-                scores=gr.Label(label="事件字段一致性分数")
-                raw_json=gr.Code(label="完整 JSON 输出", language="json")
-        btn.click(run_demo, inputs=[image,text,image_context], outputs=[summary,scores,raw_json])
-        gr.Examples(examples=EXAMPLES, inputs=[image,text,image_context])
-        gr.Markdown("## 使用说明\n1. 如果没有图像 caption/OCR，系统会提示证据不足；这是为了避免 demo 假装看懂图片。\n2. 后续接入 BLIP-2/VDT/E3-VDT 后，`image_context` 将由离线缓存或模型自动生成。\n3. 所有模块输出必须遵守 `docs/OUTPUT_SCHEMA.md`。\n4. 样例的期望输出见 `docs/DEMO_CASES.md`，机器可读版本见 `examples/demo_cases.jsonl`。")
+        with gr.Tabs():
+            with gr.Tab("OOC 检测演示"):
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        image=gr.Image(label="新闻图片（可选；当前 demo 不直接识图）", type="filepath")
+                        text=gr.Textbox(label="新闻文本 / Caption", lines=5, placeholder="输入新闻 caption 或 claim")
+                        image_context=gr.Textbox(label="图像上下文（建议填写：图像原始 caption / OCR / 检索证据）", lines=5, placeholder="例如：People gathered in London during an earlier climate demonstration in 2020.")
+                        btn=gr.Button("开始检测", variant="primary")
+                    with gr.Column(scale=1):
+                        summary=gr.Markdown(label="结构化判断")
+                        scores=gr.Label(label="事件字段一致性分数")
+                        raw_json=gr.Code(label="完整 JSON 输出", language="json")
+                btn.click(run_demo, inputs=[image,text,image_context], outputs=[summary,scores,raw_json])
+                gr.Examples(examples=EXAMPLES, inputs=[image,text,image_context])
+                gr.Markdown("## 使用说明\n1. 如果没有图像 caption/OCR，系统会提示证据不足；这是为了避免 demo 假装看懂图片。\n2. 后续接入 BLIP-2/VDT/E3-VDT 后，`image_context` 将由离线缓存或模型自动生成。\n3. 所有模块输出必须遵守 `docs/OUTPUT_SCHEMA.md`。\n4. 样例的期望输出见 `docs/DEMO_CASES.md`，机器可读版本见 `examples/demo_cases.jsonl`。")
+            with gr.Tab("复现实验指标"):
+                gr.Markdown(_render_reproduction_metrics())
     return app
 
 

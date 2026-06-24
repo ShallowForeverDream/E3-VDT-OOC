@@ -1,0 +1,60 @@
+[
+  {
+    "id": "vdt_blip2_strict_bbc_guardian_bs128",
+    "method": "VDT baseline",
+    "feature_setting": "BLIP-2 / GaussianBlur strict",
+    "target_domain_arg": "bbc,guardian",
+    "status": "completed",
+    "command": "python -m trainers.train_VDT --batch_size 128 --max_epochs 20 --target_domain bbc,guardian --base_model blip-2 --loss_type simclr",
+    "note": "Official batch_size=256 triggered CUDA CUBLAS on RTX 4060 Laptop; bs128 completed. Full log parsing shows best F1 at the first validation block; saved checkpoint epoch=1.",
+    "dataset_sizes": {
+      "source_train": 409920,
+      "source_validation": 42931,
+      "target_train": 772980,
+      "target_validation": 81237
+    },
+    "best_checkpoint": {
+      "epoch": 1,
+      "local_path": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/official_bs128_20ep_bbc_guardian/VDTNews_blip2_strict_bbc_guardian_bs128_best_epoch1.pt"
+    },
+    "metrics": {
+      "accuracy_at_eer": 0.3402390536331967,
+      "eer": 0.6597640318508449,
+      "threshold_at_eer": -2.6894748210906982,
+      "auc": 0.7398131734979349,
+      "f1": 0.7353282596804637,
+      "acc": 0.7382719696689932,
+      "f1_real": 0.7096069272583244,
+      "f1_fake": 0.761786322488124,
+      "confusion_matrix": [
+        [
+          25978,
+          15214
+        ],
+        [
+          6048,
+          33997
+        ]
+      ]
+    }
+  },
+  {
+    "id": "vdt_blip2_strict_usa_today_washington_post_bs128",
+    "method": "VDT baseline",
+    "feature_setting": "BLIP-2 / GaussianBlur strict",
+    "target_domain_arg": "usa_today,washington_post",
+    "status": "running",
+    "started_at": "2026-06-24 20:04:26 Asia/Shanghai",
+    "pid": 67464,
+    "command": "python -m trainers.train_VDT --batch_size 128 --max_epochs 20 --target_domain usa_today,washington_post --base_model blip-2 --loss_type simclr",
+    "note": "Second strict reproduction run started in background; update metrics after completion.",
+    "dataset_sizes": {
+      "source_train": 567012,
+      "source_validation": 59163,
+      "target_train": 409920,
+      "target_validation": 42931
+    },
+    "run_dir": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/official_bs128_20ep_usa_today_washington_post",
+    "metrics": null
+  }
+]
