@@ -90,6 +90,7 @@ python -m e3vdt.inference.cli \
 11. [`docs/ppt/PPT_CONTENT_DRAFT.md`](docs/ppt/PPT_CONTENT_DRAFT.md)：答辩 PPT 逐页内容稿。
 12. [`docs/FINAL_DELIVERABLES.md`](docs/FINAL_DELIVERABLES.md)：期末提交前总清单、演示顺序和仍需人工确认项。
 13. [`docs/PRESENTATION_RUNBOOK.md`](docs/PRESENTATION_RUNBOOK.md)：答辩现场启动、备用方案和故障排查手册。
+14. [`docs/DEFENSE_QA.md`](docs/DEFENSE_QA.md)：答辩追问的统一回答口径。
 
 
 ## 分类准确率约束

@@ -49,6 +49,12 @@ type examples\demo_outputs.json
 
 详细故障排查见 `docs/PRESENTATION_RUNBOOK.md`。
 
+答辩追问统一口径见：
+
+```text
+docs/DEFENSE_QA.md
+```
+
 网页端重点展示三个页：
 
 1. `OOC 检测演示`：展示错配类型、冲突字段、event scores 和 JSON 输出。

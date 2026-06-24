@@ -26,6 +26,7 @@ REQUIRED_FILES = [
     "scripts/parse_vdt_log.py",
     "scripts/start_demo.ps1",
     "docs/FINAL_DELIVERABLES.md",
+    "docs/DEFENSE_QA.md",
     "docs/PRESENTATION_RUNBOOK.md",
     "docs/PROJECT_BRIEF.md",
     "docs/INNOVATION_POINTS.md",
