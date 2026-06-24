@@ -47,6 +47,7 @@ python -m e3vdt.inference.cli --text "A protest erupted in Paris on Monday." --i
 4. [`docs/TEAM_WORKFLOW.md`](docs/TEAM_WORKFLOW.md)：Git 分支、提交、PR 规则。
 5. [`docs/WHAT_TO_SEND_ME.md`](docs/WHAT_TO_SEND_ME.md)：需要提供给组长/集成者的材料格式。
 6. [`docs/OUTPUT_SCHEMA.md`](docs/OUTPUT_SCHEMA.md)：系统输入输出格式，所有模块都按这个对齐。
+7. [`docs/DEMO_EXAMPLES.md`](docs/DEMO_EXAMPLES.md)：答辩演示时可直接点击/粘贴的样例。
 
 ## 分工
 

@@ -10,9 +10,13 @@ if str(SRC) not in sys.path: sys.path.insert(0, str(SRC))
 from e3vdt.inference.pipeline import E3VDTPipeline
 pipe=E3VDTPipeline()
 EXAMPLES=[
-    [None,"A large protest erupted in Paris on Monday after the new climate policy was announced.","People gathered in London during an earlier climate demonstration in 2020."],
-    [None,"The president visited Beijing for a summit with Chinese officials in 2024.","The president visited Beijing for a summit with Chinese officials in 2024."],
-    [None,"Rescue teams worked after a flood hit Shanghai in July.","Firefighters responded to a fire in New York in 2019."],
+    [None,"A flood caused evacuations in Shanghai in 2024.","A flood caused evacuations in Shanghai in 2024."],
+    [None,"A large protest erupted in Paris on Monday after a new climate policy.","People gathered in London during a climate demonstration on Monday."],
+    [None,"A protest took place in Paris in 2024.","People gathered for a protest in Paris on Monday."],
+    [None,"Barack Obama will meet officials in Beijing in 2024.","Elon Musk will meet officials in Beijing in 2024."],
+    [None,"A covid hospital opened in Paris in 2024.","A football match took place in Paris in 2024."],
+    [None,"Soldiers attacked a convoy in Ukraine in 2024.","Soldiers rescued a convoy in Ukraine in 2024."],
+    [None,"A fire broke out in New York in 2024.",""],
 ]
 def run_demo(image, text, image_context):
     image_path=image if isinstance(image,str) else None
