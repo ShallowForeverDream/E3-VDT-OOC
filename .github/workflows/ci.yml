@@ -26,13 +26,14 @@ jobs:
 
       - name: Compile Python sources
         run: |
-          python -m py_compile demo/app.py scripts/check_project.py scripts/run_demo_cases.py scripts/check_accuracy_preserving.py scripts/check_final_deliverables.py scripts/make_submission_package.py
+          python -m py_compile demo/app.py scripts/check_project.py scripts/run_demo_cases.py scripts/check_accuracy_preserving.py scripts/check_final_deliverables.py scripts/export_demo_outputs.py scripts/make_submission_package.py
 
       - name: Run project smoke checks
         run: |
           python scripts/check_project.py
           python scripts/run_demo_cases.py
           python scripts/check_accuracy_preserving.py
+          python scripts/export_demo_outputs.py --out outputs/demo_outputs_ci.json
           python scripts/check_final_deliverables.py
 
       - name: Run pytest

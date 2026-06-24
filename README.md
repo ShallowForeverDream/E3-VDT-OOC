@@ -37,6 +37,18 @@ python demo/app.py
 python scripts/make_submission_package.py
 ```
 
+Windows 答辩现场一键启动：
+
+```powershell
+.\scripts\start_demo.ps1
+```
+
+网页无法打开时，可使用离线备用输出：
+
+```bash
+python scripts/export_demo_outputs.py
+```
+
 启动后终端会打印实际访问地址，例如 `http://127.0.0.1:7860`。如果 `7860` 被占用，程序会自动尝试 `7861`、`7862` 等后续端口；也可以手动指定：
 
 ```powershell
@@ -77,6 +89,7 @@ python -m e3vdt.inference.cli \
 10. [`docs/report/FINAL_REPORT_DRAFT.md`](docs/report/FINAL_REPORT_DRAFT.md)：结课报告正文初稿。
 11. [`docs/ppt/PPT_CONTENT_DRAFT.md`](docs/ppt/PPT_CONTENT_DRAFT.md)：答辩 PPT 逐页内容稿。
 12. [`docs/FINAL_DELIVERABLES.md`](docs/FINAL_DELIVERABLES.md)：期末提交前总清单、演示顺序和仍需人工确认项。
+13. [`docs/PRESENTATION_RUNBOOK.md`](docs/PRESENTATION_RUNBOOK.md)：答辩现场启动、备用方案和故障排查手册。
 
 
 ## 分类准确率约束

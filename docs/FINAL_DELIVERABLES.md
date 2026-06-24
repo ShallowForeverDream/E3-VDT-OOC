@@ -34,6 +34,21 @@ python scripts/make_submission_package.py
 
 输出位于 `outputs/submission/`，会自动排除数据集、模型权重、checkpoint、缓存和本地临时文件。
 
+答辩现场推荐启动：
+
+```powershell
+.\scripts\start_demo.ps1
+```
+
+现场网页无法打开时，可用离线备用输出：
+
+```powershell
+python scripts/export_demo_outputs.py
+type examples\demo_outputs.json
+```
+
+详细故障排查见 `docs/PRESENTATION_RUNBOOK.md`。
+
 网页端重点展示三个页：
 
 1. `OOC 检测演示`：展示错配类型、冲突字段、event scores 和 JSON 输出。

@@ -1,0 +1,684 @@
+[
+  {
+    "id": "ex01_non_ooc_same_event",
+    "scenario": "正例：图文描述同一事件",
+    "demo_point": "用于先展示系统正常输出：字段一致、整体判为 Non-OOC。",
+    "text": "A flood caused evacuations in Shanghai in 2024.",
+    "image_context": "A flood caused evacuations in Shanghai in 2024.",
+    "expected": {
+      "label": "Non-OOC",
+      "mismatch_type": "benign illustrative image",
+      "conflict_fields": []
+    },
+    "actual": {
+      "label": "Non-OOC",
+      "confidence": 0.8,
+      "mismatch_type": "benign illustrative image",
+      "conflict_fields": [],
+      "event_scores": {
+        "entity": 0.5,
+        "location": 1.0,
+        "time": 1.0,
+        "event_type": 1.0,
+        "relation": 0.5
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "A flood caused evacuations in Shanghai in 2024.",
+        "entities": [],
+        "locations": [
+          "shanghai"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "disaster"
+        ],
+        "relations": []
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "A flood caused evacuations in Shanghai in 2024.",
+        "entities": [],
+        "locations": [
+          "shanghai"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "disaster"
+        ],
+        "relations": []
+      },
+      "evidence": [],
+      "explanation": "系统判断为 Non-OOC：未发现强冲突字段，事件一致性总体较高。事件一致性分数：entity=0.50, location=1.00, time=1.00, event_type=1.00, relation=0.50。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": []
+    }
+  },
+  {
+    "id": "ex02_location_mismatch",
+    "scenario": "地点错配：同类抗议事件但地点不同",
+    "demo_point": "适合讲 location 字段：事件类型和时间相近，但 Paris/London 冲突。",
+    "text": "A large protest erupted in Paris on Monday after a new climate policy.",
+    "image_context": "People gathered in London during a climate demonstration on Monday.",
+    "expected": {
+      "label": "OOC",
+      "mismatch_type": "location mismatch",
+      "conflict_fields": [
+        "location"
+      ]
+    },
+    "actual": {
+      "label": "OOC",
+      "confidence": 0.55,
+      "mismatch_type": "location mismatch",
+      "conflict_fields": [
+        "location"
+      ],
+      "event_scores": {
+        "entity": 0.5,
+        "location": 0.0,
+        "time": 1.0,
+        "event_type": 1.0,
+        "relation": 1.0
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "A large protest erupted in Paris on Monday after a new climate policy.",
+        "entities": [],
+        "locations": [
+          "paris"
+        ],
+        "times": [
+          "Monday"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "People gathered in London during a climate demonstration on Monday.",
+        "entities": [],
+        "locations": [
+          "london"
+        ],
+        "times": [
+          "Monday"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "evidence": [],
+      "explanation": "系统判断为 OOC：主要错配类型为 location mismatch，冲突字段为 location。事件一致性分数：entity=0.50, location=0.00, time=1.00, event_type=1.00, relation=1.00。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": []
+    }
+  },
+  {
+    "id": "ex03_temporal_mismatch",
+    "scenario": "时间错配：同一地点同类事件但时间不同",
+    "demo_point": "适合讲 temporal 字段：地点和事件类型一致，但时间表达冲突。",
+    "text": "A protest took place in Paris in 2024.",
+    "image_context": "People gathered for a protest in Paris on Monday.",
+    "expected": {
+      "label": "OOC",
+      "mismatch_type": "temporal mismatch",
+      "conflict_fields": [
+        "time"
+      ]
+    },
+    "actual": {
+      "label": "OOC",
+      "confidence": 0.55,
+      "mismatch_type": "temporal mismatch",
+      "conflict_fields": [
+        "time"
+      ],
+      "event_scores": {
+        "entity": 0.5,
+        "location": 1.0,
+        "time": 0.0,
+        "event_type": 1.0,
+        "relation": 1.0
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "A protest took place in Paris in 2024.",
+        "entities": [],
+        "locations": [
+          "paris"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "People gathered for a protest in Paris on Monday.",
+        "entities": [],
+        "locations": [
+          "paris"
+        ],
+        "times": [
+          "Monday"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "evidence": [],
+      "explanation": "系统判断为 OOC：主要错配类型为 temporal mismatch，冲突字段为 time。事件一致性分数：entity=0.50, location=1.00, time=0.00, event_type=1.00, relation=1.00。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": []
+    }
+  },
+  {
+    "id": "ex04_entity_mismatch",
+    "scenario": "主体错配：人物不同但地点时间动作一致",
+    "demo_point": "适合讲 entity 字段：Beijing/2024/meet 一致，但 Barack Obama 与 Elon Musk 冲突。",
+    "text": "Barack Obama will meet officials in Beijing in 2024.",
+    "image_context": "Elon Musk will meet officials in Beijing in 2024.",
+    "expected": {
+      "label": "OOC",
+      "mismatch_type": "entity mismatch",
+      "conflict_fields": [
+        "entity"
+      ]
+    },
+    "actual": {
+      "label": "OOC",
+      "confidence": 0.55,
+      "mismatch_type": "entity mismatch",
+      "conflict_fields": [
+        "entity"
+      ],
+      "event_scores": {
+        "entity": 0.1429,
+        "location": 1.0,
+        "time": 1.0,
+        "event_type": 0.5,
+        "relation": 1.0
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "Barack Obama will meet officials in Beijing in 2024.",
+        "entities": [
+          "Barack Obama"
+        ],
+        "locations": [
+          "beijing"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [],
+        "relations": [
+          "meet"
+        ]
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "Elon Musk will meet officials in Beijing in 2024.",
+        "entities": [
+          "Elon Musk"
+        ],
+        "locations": [
+          "beijing"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [],
+        "relations": [
+          "meet"
+        ]
+      },
+      "evidence": [],
+      "explanation": "系统判断为 OOC：主要错配类型为 entity mismatch，冲突字段为 entity。事件一致性分数：entity=0.14, location=1.00, time=1.00, event_type=0.50, relation=1.00。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": []
+    }
+  },
+  {
+    "id": "ex05_event_type_mismatch",
+    "scenario": "事件类型错配：地点时间一致但新闻类型不同",
+    "demo_point": "适合讲 event_type 字段：Paris/2024 一致，但 health 与 sports 冲突。",
+    "text": "A covid hospital opened in Paris in 2024.",
+    "image_context": "A football match took place in Paris in 2024.",
+    "expected": {
+      "label": "OOC",
+      "mismatch_type": "event-type mismatch",
+      "conflict_fields": [
+        "event_type"
+      ]
+    },
+    "actual": {
+      "label": "OOC",
+      "confidence": 0.55,
+      "mismatch_type": "event-type mismatch",
+      "conflict_fields": [
+        "event_type"
+      ],
+      "event_scores": {
+        "entity": 0.5,
+        "location": 1.0,
+        "time": 1.0,
+        "event_type": 0.1667,
+        "relation": 0.5
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "A covid hospital opened in Paris in 2024.",
+        "entities": [],
+        "locations": [
+          "paris"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "health"
+        ],
+        "relations": []
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "A football match took place in Paris in 2024.",
+        "entities": [],
+        "locations": [
+          "paris"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "sports"
+        ],
+        "relations": []
+      },
+      "evidence": [],
+      "explanation": "系统判断为 OOC：主要错配类型为 event-type mismatch，冲突字段为 event_type。事件一致性分数：entity=0.50, location=1.00, time=1.00, event_type=0.17, relation=0.50。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": []
+    }
+  },
+  {
+    "id": "ex06_relation_mismatch",
+    "scenario": "关系/动作错配：主体地点时间一致但动作不同",
+    "demo_point": "适合讲 relation 字段：主体、地点、时间、事件域一致，但 attacked/meet 动作冲突。",
+    "text": "Soldiers attacked a convoy in Ukraine in 2024.",
+    "image_context": "Soldiers will meet a convoy in Ukraine in 2024.",
+    "expected": {
+      "label": "OOC",
+      "mismatch_type": "relation mismatch",
+      "conflict_fields": [
+        "relation"
+      ]
+    },
+    "actual": {
+      "label": "OOC",
+      "confidence": 0.55,
+      "mismatch_type": "relation mismatch",
+      "conflict_fields": [
+        "relation"
+      ],
+      "event_scores": {
+        "entity": 1.0,
+        "location": 1.0,
+        "time": 1.0,
+        "event_type": 1.0,
+        "relation": 0.2
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "Soldiers attacked a convoy in Ukraine in 2024.",
+        "entities": [
+          "Soldiers"
+        ],
+        "locations": [
+          "ukraine"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "war/conflict"
+        ],
+        "relations": [
+          "attack"
+        ]
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "Soldiers will meet a convoy in Ukraine in 2024.",
+        "entities": [
+          "Soldiers"
+        ],
+        "locations": [
+          "ukraine"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "war/conflict"
+        ],
+        "relations": [
+          "meet"
+        ]
+      },
+      "evidence": [],
+      "explanation": "系统判断为 OOC：主要错配类型为 relation mismatch，冲突字段为 relation。事件一致性分数：entity=1.00, location=1.00, time=1.00, event_type=1.00, relation=0.20。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": []
+    }
+  },
+  {
+    "id": "ex07_multi_field_hard_negative",
+    "scenario": "Hard Negative：跨多个字段冲突",
+    "demo_point": "适合压轴展示：地点、时间、事件类型同时冲突，系统仍输出主错配类型和冲突字段列表。",
+    "text": "A fire broke out in New York on Monday.",
+    "image_context": "A football match took place in London in 2019.",
+    "expected": {
+      "label": "OOC",
+      "mismatch_type": "location mismatch",
+      "conflict_fields": [
+        "location",
+        "time",
+        "event_type"
+      ]
+    },
+    "actual": {
+      "label": "OOC",
+      "confidence": 0.85,
+      "mismatch_type": "location mismatch",
+      "conflict_fields": [
+        "location",
+        "time",
+        "event_type"
+      ],
+      "event_scores": {
+        "entity": 0.5,
+        "location": 0.2143,
+        "time": 0.0,
+        "event_type": 0.2857,
+        "relation": 0.5
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "A fire broke out in New York on Monday.",
+        "entities": [],
+        "locations": [
+          "new york"
+        ],
+        "times": [
+          "Monday"
+        ],
+        "event_types": [
+          "disaster"
+        ],
+        "relations": []
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "A football match took place in London in 2019.",
+        "entities": [],
+        "locations": [
+          "london"
+        ],
+        "times": [
+          "2019"
+        ],
+        "event_types": [
+          "sports"
+        ],
+        "relations": []
+      },
+      "evidence": [],
+      "explanation": "系统判断为 OOC：主要错配类型为 location mismatch，冲突字段为 location、time、event_type。事件一致性分数：entity=0.50, location=0.21, time=0.00, event_type=0.29, relation=0.50。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": []
+    }
+  },
+  {
+    "id": "ex08_uncertain_no_image_context",
+    "scenario": "证据不足：没有图像上下文",
+    "demo_point": "用于说明系统不会在证据不足时硬判，符合“证据约束”的创新点。",
+    "text": "A fire broke out in New York in 2024.",
+    "image_context": "",
+    "expected": {
+      "label": "Uncertain",
+      "mismatch_type": "uncertain / evidence insufficient",
+      "conflict_fields": []
+    },
+    "actual": {
+      "label": "Uncertain",
+      "confidence": 0.35,
+      "mismatch_type": "uncertain / evidence insufficient",
+      "conflict_fields": [],
+      "event_scores": {
+        "entity": 0.5,
+        "location": 0.25,
+        "time": 0.25,
+        "event_type": 0.25,
+        "relation": 0.5
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "A fire broke out in New York in 2024.",
+        "entities": [],
+        "locations": [
+          "new york"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "disaster"
+        ],
+        "relations": []
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "",
+        "entities": [],
+        "locations": [],
+        "times": [],
+        "event_types": [],
+        "relations": []
+      },
+      "evidence": [],
+      "explanation": "系统暂判为 Uncertain：图像侧上下文或外部证据不足，无法可靠判断具体错配类型。当前事件分数：entity=0.50, location=0.25, time=0.25, event_type=0.25, relation=0.50。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": [
+        "未提供图像上下文：demo 无法直接理解图片内容，建议填写 image caption/OCR/original context。"
+      ]
+    }
+  },
+  {
+    "id": "ex09_chinese_location_mismatch",
+    "scenario": "中文地点错配：中文输入可演示",
+    "demo_point": "用于展示系统支持中文关键词和中文地点字段抽取。",
+    "text": "2024年，北京市举行抗议游行。",
+    "image_context": "2024年，上海市举行抗议游行。",
+    "expected": {
+      "label": "OOC",
+      "mismatch_type": "location mismatch",
+      "conflict_fields": [
+        "location"
+      ]
+    },
+    "actual": {
+      "label": "OOC",
+      "confidence": 0.55,
+      "mismatch_type": "location mismatch",
+      "conflict_fields": [
+        "location"
+      ],
+      "event_scores": {
+        "entity": 0.5,
+        "location": 0.3333,
+        "time": 1.0,
+        "event_type": 1.0,
+        "relation": 1.0
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "2024年，北京市举行抗议游行。",
+        "entities": [],
+        "locations": [
+          "北京市"
+        ],
+        "times": [
+          "2024年"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "2024年，上海市举行抗议游行。",
+        "entities": [],
+        "locations": [
+          "上海市"
+        ],
+        "times": [
+          "2024年"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "evidence": [],
+      "explanation": "系统判断为 OOC：主要错配类型为 location mismatch，冲突字段为 location。事件一致性分数：entity=0.50, location=0.33, time=1.00, event_type=1.00, relation=1.00。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": []
+    }
+  },
+  {
+    "id": "ex10_non_ooc_finance_context",
+    "scenario": "正例：财经场景一致",
+    "demo_point": "展示不是所有语义不完全相同都判 OOC；关键事件字段一致时可判 Non-OOC。",
+    "text": "stock market rose in New York in 2024.",
+    "image_context": "stock market traders worked in New York in 2024.",
+    "expected": {
+      "label": "Non-OOC",
+      "mismatch_type": "benign illustrative image",
+      "conflict_fields": []
+    },
+    "actual": {
+      "label": "Non-OOC",
+      "confidence": 0.8,
+      "mismatch_type": "benign illustrative image",
+      "conflict_fields": [],
+      "event_scores": {
+        "entity": 0.5,
+        "location": 1.0,
+        "time": 1.0,
+        "event_type": 1.0,
+        "relation": 0.5
+      },
+      "text_event": {
+        "source": "caption/text",
+        "raw_text": "stock market rose in New York in 2024.",
+        "entities": [],
+        "locations": [
+          "new york"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "finance"
+        ],
+        "relations": []
+      },
+      "image_event": {
+        "source": "image_context/evidence",
+        "raw_text": "stock market traders worked in New York in 2024.",
+        "entities": [],
+        "locations": [
+          "new york"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "finance"
+        ],
+        "relations": []
+      },
+      "evidence": [],
+      "explanation": "系统判断为 Non-OOC：未发现强冲突字段，事件一致性总体较高。事件一致性分数：entity=0.50, location=1.00, time=1.00, event_type=1.00, relation=0.50。",
+      "model_version": "e3-vdt-demo-heuristic-v0.2",
+      "classification_policy": "event_sidecar_demo",
+      "decision_source": "event_heuristic_demo",
+      "baseline_label": null,
+      "baseline_score": null,
+      "warnings": []
+    }
+  }
+]

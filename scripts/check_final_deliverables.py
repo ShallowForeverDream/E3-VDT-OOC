@@ -22,8 +22,11 @@ REQUIRED_FILES = [
     "scripts/check_project.py",
     "scripts/run_demo_cases.py",
     "scripts/check_accuracy_preserving.py",
+    "scripts/export_demo_outputs.py",
     "scripts/parse_vdt_log.py",
+    "scripts/start_demo.ps1",
     "docs/FINAL_DELIVERABLES.md",
+    "docs/PRESENTATION_RUNBOOK.md",
     "docs/PROJECT_BRIEF.md",
     "docs/INNOVATION_POINTS.md",
     "docs/ACCURACY_PRESERVING_STRATEGY.md",
@@ -35,6 +38,7 @@ REQUIRED_FILES = [
     "docs/ppt/PPT_CONTENT_DRAFT.md",
     "docs/ppt/E3-VDT-OOC-答辩PPT初稿.pptx",
     "examples/demo_cases.jsonl",
+    "examples/demo_outputs.json",
     "examples/reproduction_metrics.json",
 ]
 
