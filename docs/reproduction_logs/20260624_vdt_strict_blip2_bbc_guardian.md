@@ -41,7 +41,7 @@ RuntimeError: CUDA error: CUBLAS_STATUS_EXECUTION_FAILED
 
 处理：记录为复现偏差，改用 `batch_size=128` 继续。
 
-## 当前运行：batch_size=128
+## batch_size=128 运行结果
 
 命令：
 
@@ -49,7 +49,7 @@ RuntimeError: CUDA error: CUBLAS_STATUS_EXECUTION_FAILED
 python -m trainers.train_VDT --batch_size 128 --max_epochs 20 --target_domain bbc,guardian --base_model blip-2 --loss_type simclr
 ```
 
-当前状态：运行中。
+状态：已结束。训练没有出现 `Traceback` / `CUDA error`。源码中 `earlystop_epochs = 5`，且 `without_progress += 1` 每轮都会执行，因此该 run 实际完成到 `Epoch 5` 后停止。保存的最佳 checkpoint 为 `epoch=1`。
 
 已确认数据集加载成功：
 
@@ -59,6 +59,25 @@ source validation dataset size: 42931
 target train dataset size: 772980
 target validation dataset size: 81237
 ```
+
+模型文件保存在本地，不提交 GitHub：
+
+```text
+D:\MY_PROJECT\OOC\ooc_repro_baselines\external\VDT\saved_model\VDTNews.pt
+```
+
+文件大小约 `124.04 MB`，保存时间 `2026-06-24 18:07:38`。
+
+## batch_size=128 验证指标
+
+| checkpoint/run block | Accuracy at EER | EER | AUC | F1 | Acc | F1 real | F1 fake | 混淆矩阵 |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| best / epoch 1 | 0.3318 | 0.6682 | 0.7291 | **0.7230** | **0.7273** | **0.6907** | 0.7562 | `[[24733,16459],[5692,34353]]` |
+| later block | 0.2759 | 0.7241 | 0.7276 | 0.7193 | 0.7255 | 0.6804 | **0.7594** | `[[23738,17454],[4848,35197]]` |
+| later block | 0.2551 | 0.7450 | 0.7241 | 0.7158 | 0.7220 | 0.6765 | 0.7563 | `[[23608,17584],[4999,35046]]` |
+| final block | 0.2688 | 0.7312 | 0.7276 | 0.7209 | 0.7257 | 0.6866 | 0.7560 | `[[24417,16775],[5511,34534]]` |
+
+当前可汇报的 strict BLIP-2/GaussianBlur VDT baseline：`F1=0.7230`、`Acc=0.7273`、`AUC=0.7291`，target domain 为 `bbc,guardian`。
 
 ## 本地日志路径
 
@@ -73,8 +92,9 @@ D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs128_20
 D:\MY_PROJECT\OOC\datasets\check_vdt_blip2_strict_training.ps1
 ```
 
-## 待补充
+## 待补充 / 下一步
 
-- 20 epoch 最终指标。
-- TTT 前后指标。
-- 与 VDT 论文官方结果的偏差分析。
+- 对照论文表格确认该 `bbc,guardian` 设置应比较的官方指标。
+- 运行另外一个 target domain，用于形成至少 2 组 baseline 结果。
+- 在 E3-VDT 系统侧接入该 baseline 结果展示，但不把 124MB 模型提交 GitHub。
+- 可选：修复 early-stop 逻辑后做 extended run，作为“实现修正/消融实验”，不要混作官方复现。
