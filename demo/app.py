@@ -102,11 +102,11 @@ def run_demo(image, text, image_context):
     image_path=image if isinstance(image,str) else None
     obj=pipe.predict(text=text, image_path=image_path, image_context=image_context).to_dict()
     fields=", ".join(obj["conflict_fields"]) if obj["conflict_fields"] else "无明确冲突 / 证据不足"
-    summary=f"### 判断：{obj['label']}\n\n- 置信度：**{obj['confidence']:.2f}**\n- 错配类型：**{obj['mismatch_type']}**\n- 冲突字段：`{fields}`\n\n{obj['explanation']}"
+    summary=f"### 判断：{obj['label']}\n\n- 置信度：**{obj['confidence']:.2f}**\n- 错配类型：**{obj['mismatch_type']}**\n- 冲突字段：`{fields}`\n- 分类策略：`{obj.get('classification_policy','-')}`\n- 决策来源：`{obj.get('decision_source','-')}`\n\n{obj['explanation']}"
     return summary, obj["event_scores"], json.dumps(obj, ensure_ascii=False, indent=2)
 def build_app():
     with gr.Blocks(title="E3-VDT-OOC") as app:
-        gr.Markdown("# E3-VDT-OOC 跨域图文内容挪用检测系统\n输入新闻图片和文本，输出 OOC 判断、错配类型、冲突字段和结构化解释。\n\n> 当前 demo 使用轻量可解释 heuristic pipeline；VDT/E3-VDT 严格模型训练完成后将替换后端推理模块。")
+        gr.Markdown("# E3-VDT-OOC 跨域图文内容挪用检测系统\n输入新闻图片和文本，输出 OOC 判断、错配类型、冲突字段和结构化解释。\n\n> 当前 demo 使用轻量可解释 heuristic pipeline 方便展示错配类型；正式实验采用 accuracy-preserving / sidecar 策略：主分类继承 VDT baseline，事件字段模块只做归因，保证分类准确率不低于 baseline。")
         with gr.Tabs():
             with gr.Tab("OOC 检测演示"):
                 with gr.Row():

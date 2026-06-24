@@ -90,3 +90,17 @@ lambda_attr <= 0.1
 2. E3-VDT sidecar 模式：分类结果与 VDT baseline 完全一致，Accuracy/F1 持平。
 3. E3-VDT fusion 模式：只有在验证集分类指标不低于 baseline 时才进入主结果表，否则作为失败消融或不采用。
 4. 创新性主要通过归因输出、Hard Negative 分析和案例解释体现。
+
+## 代码级守护
+
+仓库中已经加入 `scripts/check_accuracy_preserving.py`，用于验证：
+
+- 当 `classification_policy="baseline_preserving"` 时，最终 `label` 必须等于输入的 `baseline_label`。
+- 即使事件字段模块检测出 location/time/entity 等冲突，也不能覆盖 VDT baseline 的主分类。
+- 输出中的 `decision_source="vdt_baseline"` 用于在 demo/日志里明确主分类来源。
+
+运行：
+
+```bash
+python scripts/check_accuracy_preserving.py
+```

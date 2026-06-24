@@ -8,7 +8,7 @@
 |---|---|---|---:|---:|---:|---|
 | VDT strict BLIP-2/GaussianBlur | completed | `bbc,guardian` | 0.7353 | 0.7383 | 0.7398 | `batch_size=128` 跑通；最佳 checkpoint 为 epoch 1。 |
 | VDT strict BLIP-2/GaussianBlur | failed_oom | `usa_today,washington_post`, bs128 | - | - | - | Epoch 1 约 2770 iter 处 CUDA OOM，保留失败日志。 |
-| VDT strict BLIP-2/GaussianBlur | running_partial | `usa_today,washington_post`, bs64 | 0.7995 | 0.8002 | 0.7988 | 当前 best-by-F1，训练仍在运行，结束后确认 final。 |
+| VDT strict BLIP-2/GaussianBlur | running_partial | `usa_today,washington_post`, bs64 | 0.8013 | 0.8017 | 0.8006 | 当前 best-by-F1（5 个 validation blocks），训练仍在运行，结束后确认 final。 |
 
 ## 已确认的数据规模
 
@@ -33,10 +33,9 @@ target validation dataset size: 42931
 ## 本地路径
 
 ```text
-D:\MY_PROJECT\OOC\ooc_repro_baselines
-esultsdt_blip2_strict\official_bs128_20ep_bbc_guardian
-D:\MY_PROJECT\OOC\ooc_repro_baselines
-esultsdt_blip2_strict\official_bs128_20ep_usa_today_washington_post
+D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs128_20ep_bbc_guardian
+D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs128_20ep_usa_today_washington_post
+D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs64_20ep_usa_today_washington_post
 ```
 
 监控第二组：
@@ -49,8 +48,7 @@ D:\MY_PROJECT\OOC\datasets\check_vdt_blip2_strict_training_usa_wp.ps1
 
 ```powershell
 cd D:\MY_PROJECT\OOC\E3-VDT-OOC
-python scripts\parse_vdt_log.py D:\MY_PROJECT\OOC\ooc_repro_baselines
-esultsdt_blip2_strict\official_bs128_20ep_bbc_guardian	rain_stdout.log
+python scripts\parse_vdt_log.py D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs64_20ep_usa_today_washington_post\train_stdout.log --out D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs64_20ep_usa_today_washington_post\parsed_metrics_current.json
 ```
 
 ## 报告写法

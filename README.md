@@ -39,6 +39,19 @@ python demo/app.py
 python -m e3vdt.inference.cli --text "A protest erupted in Paris on Monday." --image-context "People gathered in London during an earlier climate demonstration in 2020."
 ```
 
+正式实验的 accuracy-preserving / sidecar 调用方式：
+
+```bash
+python -m e3vdt.inference.cli \
+  --policy baseline_preserving \
+  --baseline-label OOC \
+  --baseline-score 0.87 \
+  --text "A protest erupted in Paris on Monday." \
+  --image-context "People gathered in London during an earlier climate demonstration in 2020."
+```
+
+此时最终 `label` 会严格等于 VDT 的 `baseline_label`；事件模块只补充错配类型和解释，不会拉低分类准确率。
+
 ## 队友拉下来后先看什么
 
 1. [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md)：项目一句话、背景、最终目标。
@@ -79,7 +92,7 @@ python -m e3vdt.inference.cli --text "A protest erupted in Paris on Monday." --i
 |---|---|---:|---:|---:|
 | `bbc,guardian` | completed | 0.7353 | 0.7383 | 0.7398 |
 | `usa_today,washington_post`, bs128 | failed: CUDA OOM | - | - | - |
-| `usa_today,washington_post`, bs64 | running | - | - | - |
+| `usa_today,washington_post`, bs64 | running_partial | 0.8013 | 0.8017 | 0.8006 |
 
 详细路径、日志和复现协议见 [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md) 与 [`docs/REPRODUCTION_PROTOCOL.md`](docs/REPRODUCTION_PROTOCOL.md)。网页 demo 的“复现实验指标”标签页也会展示这些结果。
 

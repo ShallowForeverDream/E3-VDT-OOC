@@ -127,7 +127,7 @@ C_event = [s_entity, s_location, s_time, s_event_type, s_relation]
 |---|---|---:|---:|---:|---|
 | `target_domain=bbc,guardian`, bs128 | completed | 0.7353 | 0.7383 | 0.7398 | bs256 CUBLAS 失败，bs128 跑通 |
 | `target_domain=usa_today,washington_post`, bs128 | failed_oom | - | - | - | Epoch 1 中途 CUDA OOM |
-| `target_domain=usa_today,washington_post`, bs64 | running / partial | 0.7995 | 0.8002 | 0.7988 | 当前已跑出 3 个 validation block，最终结果待训练结束确认 |
+| `target_domain=usa_today,washington_post`, bs64 | running / partial | 0.8013 | 0.8017 | 0.8006 | 当前已跑出 5 个 validation blocks，最终结果待训练结束确认 |
 
 说明：第二组 bs64 当前为运行中结果，最终报告需以训练结束后的 best-by-F1 解析结果为准。
 

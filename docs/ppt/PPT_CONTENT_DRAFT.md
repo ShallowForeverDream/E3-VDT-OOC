@@ -138,7 +138,7 @@ F1(E3-VDT) >= F1(VDT)
 | 设置 | F1 | Acc | AUC | 状态 |
 |---|---:|---:|---:|---|
 | bbc,guardian bs128 | 0.7353 | 0.7383 | 0.7398 | completed |
-| usa_today,washington_post bs64 | 0.7995 | 0.8002 | 0.7988 | running / partial |
+| usa_today,washington_post bs64 | 0.8013 | 0.8017 | 0.8006 | running / partial |
 
 讲稿：第二组是运行中当前最优，最终结果需要训练结束后更新。
 

@@ -66,7 +66,7 @@
     "started_at": "2026-06-24 20:20 Asia/Shanghai",
     "pid": 66608,
     "command": "python -m trainers.train_VDT --batch_size 64 --max_epochs 20 --target_domain usa_today,washington_post --base_model blip-2 --loss_type simclr",
-    "note": "Running; current best parsed from validation blocks so far. Final metrics will be updated after training exits.",
+    "note": "Running; current best parsed from 5 validation blocks so far. Final metrics will be updated after training exits.",
     "dataset_sizes": {
       "source_train": 567012,
       "source_validation": 59163,
@@ -75,22 +75,22 @@
     },
     "run_dir": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/official_bs64_20ep_usa_today_washington_post",
     "metrics": {
-      "accuracy_at_eer": 0.394237264447602,
-      "eer": 0.6057821175569597,
-      "threshold_at_eer": -3.259575366973877,
-      "auc": 0.7987569066401069,
-      "f1": 0.7994644547493216,
-      "acc": 0.8002142973608815,
-      "f1_real": 0.7838076273536158,
-      "f1_fake": 0.8143064365974582,
+      "accuracy_at_eer": 0.4595280799422329,
+      "eer": 0.5404939689833429,
+      "threshold_at_eer": -3.2920475006103516,
+      "auc": 0.8006214226678052,
+      "f1": 0.8012768643082937,
+      "acc": 0.8017283548018914,
+      "f1_real": 0.7884376398071283,
+      "f1_fake": 0.8134478828789341,
       "confusion_matrix": [
         [
-          15548,
-          5344
+          15861,
+          5031
         ],
         [
-          3233,
-          18806
+          3481,
+          18558
         ]
       ]
     }

@@ -63,11 +63,11 @@ D:\MY_PROJECT\OOC\datasets\check_vdt_blip2_strict_training_usa_wp.ps1
 
 ## 当前阶段性指标（running）
 
-截至 Epoch 4 运行中，已解析出 3 个 validation blocks。当前 best-by-F1：
+截至当前训练仍在运行，已解析出 5 个 validation blocks。当前 best-by-F1：
 
 | F1 | Acc | AUC | F1-real | F1-fake | confusion matrix |
 |---:|---:|---:|---:|---:|---|
-| 0.7995 | 0.8002 | 0.7988 | 0.7838 | 0.8143 | `[[15548,5344],[3233,18806]]` |
+| 0.8013 | 0.8017 | 0.8006 | 0.7884 | 0.8134 | `[[15861,5031],[3481,18558]]` |
 
 说明：该结果为 running partial，最终报告应在训练进程结束后再次运行 `scripts/parse_vdt_log.py` 并更新 final 指标。
 
