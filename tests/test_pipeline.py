@@ -5,3 +5,5 @@ def test_pipeline_outputs_schema():
     assert out["label"] in {"OOC","Non-OOC","Uncertain"}
     assert "mismatch_type" in out and "event_scores" in out
     assert "location" in out["event_scores"]
+    assert "classification_policy" in out
+    assert "decision_source" in out

@@ -16,10 +16,12 @@ https://github.com/ShallowForeverDream/E3-VDT-OOC
 git clone https://github.com/ShallowForeverDream/E3-VDT-OOC.git
 cd E3-VDT-OOC
 python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python -m pip install -e .
 python scripts/check_project.py
 python scripts/run_demo_cases.py
 python scripts/check_accuracy_preserving.py
+pytest -q
 python demo/app.py
 ```
 
