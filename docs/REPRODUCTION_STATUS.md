@@ -8,7 +8,7 @@
 |---|---|---|---:|---:|---:|---|
 | VDT strict BLIP-2/GaussianBlur | completed | `bbc,guardian` | 0.7353 | 0.7383 | 0.7398 | `batch_size=128` 跑通；最佳 checkpoint 为 epoch 1。 |
 | VDT strict BLIP-2/GaussianBlur | failed_oom | `usa_today,washington_post`, bs128 | - | - | - | Epoch 1 约 2770 iter 处 CUDA OOM，保留失败日志。 |
-| VDT strict BLIP-2/GaussianBlur | running_partial | `usa_today,washington_post`, bs64 | 0.8013 | 0.8017 | 0.8006 | 当前 best-by-F1（6 个 validation blocks），训练仍在运行，结束后确认 final。 |
+| VDT strict BLIP-2/GaussianBlur | running_partial | `usa_today,washington_post`, bs64 | 0.8013 | 0.8017 | 0.8006 | 当前 best-by-F1（7 个 validation blocks），训练仍在运行，结束后确认 final。 |
 
 ## 已确认的数据规模
 

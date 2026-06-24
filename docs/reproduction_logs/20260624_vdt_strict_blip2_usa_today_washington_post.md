@@ -63,7 +63,7 @@ D:\MY_PROJECT\OOC\datasets\check_vdt_blip2_strict_training_usa_wp.ps1
 
 ## 当前阶段性指标（running）
 
-截至当前训练仍在运行，已解析出 6 个 validation blocks。当前 best-by-F1：
+截至当前训练仍在运行，已解析出 7 个 validation blocks。当前 best-by-F1：
 
 | F1 | Acc | AUC | F1-real | F1-fake | confusion matrix |
 |---:|---:|---:|---:|---:|---|
