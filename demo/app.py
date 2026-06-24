@@ -9,15 +9,24 @@ ROOT=Path(__file__).resolve().parents[1]; SRC=ROOT/'src'
 if str(SRC) not in sys.path: sys.path.insert(0, str(SRC))
 from e3vdt.inference.pipeline import E3VDTPipeline
 pipe=E3VDTPipeline()
-EXAMPLES=[
-    [None,"A flood caused evacuations in Shanghai in 2024.","A flood caused evacuations in Shanghai in 2024."],
-    [None,"A large protest erupted in Paris on Monday after a new climate policy.","People gathered in London during a climate demonstration on Monday."],
-    [None,"A protest took place in Paris in 2024.","People gathered for a protest in Paris on Monday."],
-    [None,"Barack Obama will meet officials in Beijing in 2024.","Elon Musk will meet officials in Beijing in 2024."],
-    [None,"A covid hospital opened in Paris in 2024.","A football match took place in Paris in 2024."],
-    [None,"Soldiers attacked a convoy in Ukraine in 2024.","Soldiers rescued a convoy in Ukraine in 2024."],
-    [None,"A fire broke out in New York in 2024.",""],
-]
+
+def _load_examples():
+    """Load shared demo examples so docs, CLI tests, and Gradio stay aligned."""
+    path = ROOT / "examples" / "demo_cases.jsonl"
+    rows = []
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            rows.append([None, item["text"], item.get("image_context", "")])
+    return rows or [
+        [None, "A flood caused evacuations in Shanghai in 2024.", "A flood caused evacuations in Shanghai in 2024."],
+        [None, "A large protest erupted in Paris on Monday after a new climate policy.", "People gathered in London during a climate demonstration on Monday."],
+        [None, "A fire broke out in New York in 2024.", ""],
+    ]
+
+EXAMPLES=_load_examples()
 def run_demo(image, text, image_context):
     image_path=image if isinstance(image,str) else None
     obj=pipe.predict(text=text, image_path=image_path, image_context=image_context).to_dict()
@@ -39,7 +48,7 @@ def build_app():
                 raw_json=gr.Code(label="完整 JSON 输出", language="json")
         btn.click(run_demo, inputs=[image,text,image_context], outputs=[summary,scores,raw_json])
         gr.Examples(examples=EXAMPLES, inputs=[image,text,image_context])
-        gr.Markdown("## 使用说明\n1. 如果没有图像 caption/OCR，系统会提示证据不足；这是为了避免 demo 假装看懂图片。\n2. 后续接入 BLIP-2/VDT/E3-VDT 后，`image_context` 将由离线缓存或模型自动生成。\n3. 所有模块输出必须遵守 `docs/OUTPUT_SCHEMA.md`。")
+        gr.Markdown("## 使用说明\n1. 如果没有图像 caption/OCR，系统会提示证据不足；这是为了避免 demo 假装看懂图片。\n2. 后续接入 BLIP-2/VDT/E3-VDT 后，`image_context` 将由离线缓存或模型自动生成。\n3. 所有模块输出必须遵守 `docs/OUTPUT_SCHEMA.md`。\n4. 样例的期望输出见 `docs/DEMO_CASES.md`，机器可读版本见 `examples/demo_cases.jsonl`。")
     return app
 
 
