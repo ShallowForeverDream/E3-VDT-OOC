@@ -1,5 +1,16 @@
 # 实验计划
 
+
+## 总体实验原则：Accuracy-preserving
+
+主结果采用不降低分类准确率的策略：
+
+1. `VDT baseline`：提供 OOC / Non-OOC 分类指标。
+2. `E3-VDT sidecar`：沿用 VDT 的分类结果，因此 Accuracy/F1 与 baseline 持平；额外评估 mismatch type、conflict fields、event scores 和案例解释。
+3. `E3-VDT fusion`：只有当验证集 Accuracy/F1 不低于 VDT baseline 时才作为最终方法，否则作为消融结果。
+
+验收线：`Acc(E3-VDT) >= Acc(VDT)`，至少不能低于 baseline。
+
 ## 阶段 1：主 baseline 复现
 
 VDT original、VDT + TTT；target domain 从 `bbc,guardian` 起步；指标为 Accuracy / Macro-F1 / F1-real / F1-fake / AUC。

@@ -26,6 +26,13 @@ C_event = [s_entity, s_location, s_time, s_event_type, s_relation]
 
 构建 same-topic different-event、same-person different-time、same-location different-event、same-event-type different-location 等高相似错配样本，回应 MUSE 提出的 similarity shortcut 问题。
 
+
+## 重要约束：分类准确率不降
+
+本项目的创新不以牺牲 OOC / Non-OOC 分类准确率为代价。默认采用 **baseline-preserving sidecar**：VDT baseline 负责主分类，事件字段一致性模块负责输出 mismatch type、conflict fields、event scores 和 explanation。这样分类指标可以与 VDT 持平，同时显著增强可解释性。
+
+如果后续尝试 event score 与 VDT score 融合，只有在验证集 Accuracy/F1 不低于 VDT baseline 时才作为主结果；否则只作为消融实验记录。
+
 ## 可选创新点：Event-guided TTT
 
 如果时间允许，在 VDT 的 confidence + variance 伪标签筛选基础上加入 event stability。

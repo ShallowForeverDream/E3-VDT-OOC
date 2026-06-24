@@ -49,6 +49,12 @@ python -m e3vdt.inference.cli --text "A protest erupted in Paris on Monday." --i
 6. [`docs/OUTPUT_SCHEMA.md`](docs/OUTPUT_SCHEMA.md)：系统输入输出格式，所有模块都按这个对齐。
 7. [`docs/DEMO_CASES.md`](docs/DEMO_CASES.md)：系统测试与答辩演示样例。
 8. [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md)：VDT baseline 复现进度和指标。
+9. [`docs/ACCURACY_PRESERVING_STRATEGY.md`](docs/ACCURACY_PRESERVING_STRATEGY.md)：保证分类准确率不低于 baseline 的实现策略。
+
+
+## 分类准确率约束
+
+本项目采用 **accuracy-preserving** 路线：主分类结果默认继承 VDT baseline，事件字段模块作为旁路输出错配类型、冲突字段和解释。只有当验证集证明融合策略不降低 Accuracy/F1 时，才启用事件分数参与最终分类。
 
 ## 分工
 
