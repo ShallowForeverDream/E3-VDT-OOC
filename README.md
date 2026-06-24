@@ -50,6 +50,8 @@ python -m e3vdt.inference.cli --text "A protest erupted in Paris on Monday." --i
 7. [`docs/DEMO_CASES.md`](docs/DEMO_CASES.md)：系统测试与答辩演示样例。
 8. [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md)：VDT baseline 复现进度和指标。
 9. [`docs/ACCURACY_PRESERVING_STRATEGY.md`](docs/ACCURACY_PRESERVING_STRATEGY.md)：保证分类准确率不低于 baseline 的实现策略。
+10. [`docs/report/FINAL_REPORT_DRAFT.md`](docs/report/FINAL_REPORT_DRAFT.md)：结课报告正文初稿。
+11. [`docs/ppt/PPT_CONTENT_DRAFT.md`](docs/ppt/PPT_CONTENT_DRAFT.md)：答辩 PPT 逐页内容稿。
 
 
 ## 分类准确率约束

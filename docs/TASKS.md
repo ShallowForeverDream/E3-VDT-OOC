@@ -4,19 +4,19 @@
 
 - [x] VDT strict BLIP-2/GaussianBlur 预处理完成
 - [x] assemble processed_data
-- [~] 跑 VDT 官方复现（bs128 运行中；bs256 CUBLAS 失败已记录）
+- [~] 跑 VDT 官方复现（bbc/guardian 已完成；usa_today/washington_post bs64 运行中；bs256/bs128 显存问题已记录）
 - [x] 建立 GitHub 项目结构
 - [x] 建立 demo 初版
 - [x] 固定输出 schema
-- [ ] 写入第一版实验结果表
+- [x] 写入第一版实验结果表
 
 ## P1：重要
 
-- [ ] mismatch type 弱标签脚本接入 NewsCLIPpings
-- [ ] hard negative 子集构造
+- [~] mismatch type 弱标签脚本接入 NewsCLIPpings（demo/sidecar 已有规则版，待批量化）
+- [x] hard negative 子集构造（demo cases 已覆盖核心类型，待扩展为评测集）
 - [ ] CLIP/MUSE-lite baseline
-- [ ] 报告初稿
-- [ ] PPT 初稿
+- [x] 报告初稿
+- [x] PPT 初稿
 
 ## P2：加分
 
