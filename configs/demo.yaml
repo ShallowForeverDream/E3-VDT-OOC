@@ -1,0 +1,12 @@
+app:
+  title: "E3-VDT-OOC 跨域图文内容挪用检测系统"
+  server_name: "127.0.0.1"
+  server_port: 7860
+pipeline:
+  mode: "heuristic"
+  threshold_ooc: 0.58
+  threshold_conflict: 0.40
+  model_version: "e3-vdt-demo-heuristic-v0.1"
+ui:
+  show_debug_json: true
+  enable_examples: true

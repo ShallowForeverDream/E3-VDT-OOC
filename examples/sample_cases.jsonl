@@ -1,0 +1,3 @@
+{"id":"demo-001","text":"A large protest erupted in Paris on Monday after the new climate policy was announced.","image_context":"People gathered in London during an earlier climate demonstration in 2020.","expected":"OOC"}
+{"id":"demo-002","text":"The president visited Beijing for a summit with Chinese officials in 2024.","image_context":"The president visited Beijing for a summit with Chinese officials in 2024.","expected":"Non-OOC"}
+{"id":"demo-003","text":"Rescue teams worked after a flood hit Shanghai in July.","image_context":"Firefighters responded to a fire in New York in 2019.","expected":"OOC"}

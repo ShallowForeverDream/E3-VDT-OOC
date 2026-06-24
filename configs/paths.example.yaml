@@ -1,0 +1,11 @@
+# Copy this file to configs/paths.local.yaml and edit local paths. Do NOT commit paths.local.yaml.
+local:
+  vdt_repo: "D:/MY_PROJECT/OOC/ooc_repro_baselines/external/VDT"
+  newsclippings_repo: "D:/MY_PROJECT/OOC/datasets/NewsCLIPpings_repo"
+  visualnews_tar: "E:/OOC_Datasets/VisualNews/origin.tar"
+  visualnews_data_json: "E:/OOC_Datasets/VisualNews/origin/data.json"
+artifacts:
+  vdt_processed_data: "D:/MY_PROJECT/OOC/ooc_repro_baselines/external/VDT/NewsCLIPpings/processed_data_blip2_strict"
+  vdt_checkpoint: "artifacts/checkpoints/vdt_latest.pt"
+  e3vdt_checkpoint: "artifacts/checkpoints/e3vdt_latest.pt"
+  sample_predictions: "outputs/sample_results.jsonl"

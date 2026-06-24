@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "e3-vdt-ooc"
+version = "0.1.0"
+description = "Event-aware explainable out-of-context image-text misinformation detection demo system."
+requires-python = ">=3.8"
+authors = [{name = "E3-VDT Course Project Team"}]
+readme = "README.md"
+license = {text = "MIT"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
