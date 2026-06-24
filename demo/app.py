@@ -104,6 +104,31 @@ def run_demo(image, text, image_context):
     fields=", ".join(obj["conflict_fields"]) if obj["conflict_fields"] else "无明确冲突 / 证据不足"
     summary=f"### 判断：{obj['label']}\n\n- 置信度：**{obj['confidence']:.2f}**\n- 错配类型：**{obj['mismatch_type']}**\n- 冲突字段：`{fields}`\n- 分类策略：`{obj.get('classification_policy','-')}`\n- 决策来源：`{obj.get('decision_source','-')}`\n\n{obj['explanation']}"
     return summary, obj["event_scores"], json.dumps(obj, ensure_ascii=False, indent=2)
+
+
+def run_guardrail_demo(text, image_context, baseline_label, baseline_score):
+    obj=pipe.predict(
+        text=text,
+        image_context=image_context,
+        baseline_label=baseline_label,
+        baseline_score=float(baseline_score),
+        classification_policy="baseline_preserving",
+    ).to_dict()
+    fields=", ".join(obj["conflict_fields"]) if obj["conflict_fields"] else "无明确冲突 / 证据不足"
+    preserved = "✅ 已保持 VDT baseline 主分类" if obj["label"] == baseline_label else "❌ 主分类被覆盖，需要检查"
+    summary=(
+        f"### Accuracy-preserving 验证：{preserved}\n\n"
+        f"- VDT baseline label：**{baseline_label}**\n"
+        f"- 最终输出 label：**{obj['label']}**\n"
+        f"- VDT baseline score：**{obj.get('baseline_score', baseline_score):.2f}**\n"
+        f"- 错配类型：**{obj['mismatch_type']}**\n"
+        f"- 冲突字段：`{fields}`\n"
+        f"- 决策来源：`{obj.get('decision_source','-')}`\n\n"
+        "解释模块可以指出冲突字段，但正式策略下不覆盖 VDT 的主分类，因此分类 Accuracy/F1 不会因为 sidecar 模块下降。"
+    )
+    return summary, obj["event_scores"], json.dumps(obj, ensure_ascii=False, indent=2)
+
+
 def build_app():
     with gr.Blocks(title="E3-VDT-OOC") as app:
         gr.Markdown("# E3-VDT-OOC 跨域图文内容挪用检测系统\n输入新闻图片和文本，输出 OOC 判断、错配类型、冲突字段和结构化解释。\n\n> 当前 demo 使用轻量可解释 heuristic pipeline 方便展示错配类型；正式实验采用 accuracy-preserving / sidecar 策略：主分类继承 VDT baseline，事件字段模块只做归因，保证分类准确率不低于 baseline。")
@@ -122,6 +147,21 @@ def build_app():
                 btn.click(run_demo, inputs=[image,text,image_context], outputs=[summary,scores,raw_json])
                 gr.Examples(examples=EXAMPLES, inputs=[image,text,image_context])
                 gr.Markdown("## 使用说明\n1. 如果没有图像 caption/OCR，系统会提示证据不足；这是为了避免 demo 假装看懂图片。\n2. 后续接入 BLIP-2/VDT/E3-VDT 后，`image_context` 将由离线缓存或模型自动生成。\n3. 所有模块输出必须遵守 `docs/OUTPUT_SCHEMA.md`。\n4. 样例的期望输出见 `docs/DEMO_CASES.md`，机器可读版本见 `examples/demo_cases.jsonl`。")
+            with gr.Tab("分类不降验证"):
+                gr.Markdown("## Accuracy-preserving / Sidecar 验证\n这个标签页专门演示：即使事件字段模块发现冲突，最终 `label` 仍然严格继承 VDT baseline。")
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        guard_text=gr.Textbox(label="新闻文本 / Caption", lines=4, value="A large protest erupted in Paris on Monday after a new climate policy.")
+                        guard_image_context=gr.Textbox(label="图像上下文 / Evidence", lines=4, value="People gathered in London during a climate demonstration on Monday.")
+                        guard_label=gr.Radio(label="VDT baseline label", choices=["OOC","Non-OOC","Uncertain"], value="Non-OOC")
+                        guard_score=gr.Slider(label="VDT baseline score", minimum=0.0, maximum=1.0, value=0.91, step=0.01)
+                        guard_btn=gr.Button("验证 sidecar 不覆盖主分类", variant="primary")
+                    with gr.Column(scale=1):
+                        guard_summary=gr.Markdown(label="验证结果")
+                        guard_scores=gr.Label(label="事件字段一致性分数")
+                        guard_json=gr.Code(label="完整 JSON 输出", language="json")
+                guard_btn.click(run_guardrail_demo, inputs=[guard_text,guard_image_context,guard_label,guard_score], outputs=[guard_summary,guard_scores,guard_json])
+                gr.Markdown("答辩讲法：第一步说明 VDT 负责二分类；第二步用这个页证明 E3 sidecar 只给归因，不改分类；第三步再切回 OOC 检测演示展示错配类型。")
             with gr.Tab("复现实验指标"):
                 gr.Markdown(_render_reproduction_metrics())
     return app

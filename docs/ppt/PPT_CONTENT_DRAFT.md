@@ -163,9 +163,10 @@ F1(E3-VDT) >= F1(VDT)
 3. entity mismatch；
 4. event-type mismatch；
 5. multi-field hard negative；
-6. evidence insufficient。
+6. evidence insufficient；
+7. 切到“分类不降验证”，证明 sidecar 不覆盖 VDT baseline label。
 
-讲稿：打开 JSON 输出，强调 mismatch_type、conflict_fields 和 event_scores。
+讲稿：打开 JSON 输出，强调 mismatch_type、conflict_fields、event_scores，以及 decision_source=vdt_baseline。
 
 ## 15. 总结与分工
 

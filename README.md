@@ -65,6 +65,7 @@ python -m e3vdt.inference.cli \
 9. [`docs/ACCURACY_PRESERVING_STRATEGY.md`](docs/ACCURACY_PRESERVING_STRATEGY.md)：保证分类准确率不低于 baseline 的实现策略。
 10. [`docs/report/FINAL_REPORT_DRAFT.md`](docs/report/FINAL_REPORT_DRAFT.md)：结课报告正文初稿。
 11. [`docs/ppt/PPT_CONTENT_DRAFT.md`](docs/ppt/PPT_CONTENT_DRAFT.md)：答辩 PPT 逐页内容稿。
+12. [`docs/FINAL_DELIVERABLES.md`](docs/FINAL_DELIVERABLES.md)：期末提交前总清单、演示顺序和仍需人工确认项。
 
 
 ## 分类准确率约束

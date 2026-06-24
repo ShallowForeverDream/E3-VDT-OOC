@@ -9,6 +9,7 @@
 3. 跑 `ex07_multi_field_hard_negative`，展示 Hard Negative 和多字段归因。
 4. 跑 `ex08_uncertain_no_image_context`，说明系统证据不足时会输出 Uncertain。
 5. 如果老师想看中文，跑 `ex09_chinese_location_mismatch`。
+6. 切到网页端 `分类不降验证` 标签页，展示 sidecar 可以发现冲突，但最终 label 仍继承 VDT baseline。
 
 ## 一键命令行测试
 
@@ -36,4 +37,5 @@ python scripts\run_demo_cases.py
 
 - 我们不是只输出一个真假标签，而是输出结构化字段：`mismatch_type`、`conflict_fields`、`event_scores`、`explanation`。
 - 这些样例覆盖了从单字段错配到多字段 Hard Negative 的主要场景。
+- 解释模块是 sidecar：正式实验中 `label = baseline_label`，因此分类 Accuracy/F1 不会被错配归因模块拉低。
 - 当前样例用于系统展示；最终实验指标以 VDT/BLIP-2 严格复现与 E3-VDT 扩展实验为准。

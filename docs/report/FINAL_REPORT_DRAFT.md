@@ -166,10 +166,13 @@ C_event = [s_entity, s_location, s_time, s_event_type, s_relation]
 - `examples/reproduction_metrics.json`：复现实验指标
 - `docs/OUTPUT_SCHEMA.md`：输出格式定义
 
-网页端包含两个标签页：
+网页端包含三个核心标签页：
 
 1. OOC 检测演示：输入图片、文本和图像上下文，输出结构化判断；
-2. 复现实验指标：展示 VDT baseline 复现状态和指标。
+2. 分类不降验证：证明 sidecar 归因模块不会覆盖 VDT baseline 主分类；
+3. 复现实验指标：展示 VDT baseline 复现状态和指标。
+
+其中“分类不降验证”页会构造一个事件字段明显冲突的样例，同时输入 VDT baseline label。系统最终 `label` 严格继承 baseline，`decision_source` 标记为 `vdt_baseline`，从界面层面证明 accuracy-preserving 口径。
 
 ## 6. 结果讨论
 
