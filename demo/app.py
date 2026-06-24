@@ -19,7 +19,11 @@ def _load_examples():
             if not line.strip():
                 continue
             item = json.loads(line)
-            rows.append([None, item["text"], item.get("image_context", "")])
+            image = None
+            if item.get("demo_image"):
+                image_path = ROOT / item["demo_image"]
+                image = str(image_path) if image_path.exists() else None
+            rows.append([image, item["text"], item.get("image_context", "")])
     return rows or [
         [None, "A flood caused evacuations in Shanghai in 2024.", "A flood caused evacuations in Shanghai in 2024."],
         [None, "A large protest erupted in Paris on Monday after a new climate policy.", "People gathered in London during a climate demonstration on Monday."],
