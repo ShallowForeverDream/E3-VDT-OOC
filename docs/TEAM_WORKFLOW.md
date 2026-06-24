@@ -31,6 +31,7 @@ git push origin feature/你的任务名
 python scripts/check_project.py
 python scripts/run_demo_cases.py
 python scripts/check_accuracy_preserving.py
+python scripts/check_final_deliverables.py
 pytest -q
 ```
 
@@ -43,12 +44,24 @@ pytest -q
 3. 运行项目 smoke checks
 4. 运行 demo 样例回归
 5. 运行 accuracy-preserving 守护测试
-6. 运行 `pytest -q`
+6. 运行最终交付物自检
+7. 运行 `pytest -q`
 
 如果 CI 失败，先看失败的是哪一步：
 
 - `run_demo_cases.py` 失败：说明 demo 输出和 `examples/demo_cases.jsonl` 期望不一致。
 - `check_accuracy_preserving.py` 失败：说明 sidecar 可能覆盖了 VDT baseline 主分类，这是硬错误。
+- `check_final_deliverables.py` 失败：说明报告/PPT/指标/CI/必要文件缺失或误提交了大文件。
 - `pytest` 失败：说明接口 schema 或测试样例被破坏。
 
 禁止提交数据集、模型权重、绝对路径配置、个人隐私和 token。
+
+## 课程提交包
+
+需要把项目打包发给老师或队友时运行：
+
+```bash
+python scripts/make_submission_package.py
+```
+
+输出在 `outputs/submission/` 下。该压缩包会排除数据集、模型权重、checkpoint、缓存和本地运行输出；GitHub 仓库仍然是主要协作入口。

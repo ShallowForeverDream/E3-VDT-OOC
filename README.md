@@ -26,8 +26,15 @@ python -m pip install -e .
 python scripts/check_project.py
 python scripts/run_demo_cases.py
 python scripts/check_accuracy_preserving.py
+python scripts/check_final_deliverables.py
 pytest -q
 python demo/app.py
+```
+
+生成课程提交包（自动排除数据集、模型权重、checkpoint、缓存等大文件）：
+
+```bash
+python scripts/make_submission_package.py
 ```
 
 启动后终端会打印实际访问地址，例如 `http://127.0.0.1:7860`。如果 `7860` 被占用，程序会自动尝试 `7861`、`7862` 等后续端口；也可以手动指定：

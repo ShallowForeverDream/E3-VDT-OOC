@@ -21,9 +21,18 @@ python -m pip install -e .
 python scripts/check_project.py
 python scripts/run_demo_cases.py
 python scripts/check_accuracy_preserving.py
+python scripts/check_final_deliverables.py
 pytest -q
 python demo/app.py
 ```
+
+生成课程提交包：
+
+```bash
+python scripts/make_submission_package.py
+```
+
+输出位于 `outputs/submission/`，会自动排除数据集、模型权重、checkpoint、缓存和本地临时文件。
 
 网页端重点展示三个页：
 
@@ -75,6 +84,18 @@ python scripts/check_accuracy_preserving.py
 
 ```text
 baseline-preserving mode keeps final labels identical to VDT baseline.
+```
+
+总交付物自检：
+
+```bash
+python scripts/check_final_deliverables.py
+```
+
+通过条件：
+
+```text
+final deliverable check passed.
 ```
 
 ## 5. 答辩演示推荐顺序
