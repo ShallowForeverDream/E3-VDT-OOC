@@ -9,7 +9,8 @@ VDT original、VDT + TTT；target domain 从 `bbc,guardian` 起步；指标为 A
 | 设置 | 状态 | F1 | Acc | AUC | 说明 |
 |---|---|---:|---:|---:|---|
 | VDT strict BLIP-2/GaussianBlur, `target_domain=bbc,guardian`, `batch_size=128` | completed | 0.7353 | 0.7383 | 0.7398 | 官方 `batch_size=256` 在本机 CUDA/CUBLAS 报错，降到 128 后跑通。 |
-| VDT strict BLIP-2/GaussianBlur, `target_domain=usa_today,washington_post`, `batch_size=128` | running | - | - | - | 第二组 domain 正在后台运行。 |
+| VDT strict BLIP-2/GaussianBlur, `target_domain=usa_today,washington_post`, `batch_size=128` | failed_oom | - | - | - | Epoch 1 中途 CUDA OOM，保留日志作为复现偏差。 |
+| VDT strict BLIP-2/GaussianBlur, `target_domain=usa_today,washington_post`, `batch_size=64` | running | - | - | - | 第二组 domain 已用更小 batch 重启。 |
 
 ## 阶段 2：轻量 baseline
 

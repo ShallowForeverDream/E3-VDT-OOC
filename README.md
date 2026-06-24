@@ -70,7 +70,8 @@ python -m e3vdt.inference.cli --text "A protest erupted in Paris on Monday." --i
 | 实验 | 状态 | F1 | Acc | AUC |
 |---|---|---:|---:|---:|
 | `bbc,guardian` | completed | 0.7353 | 0.7383 | 0.7398 |
-| `usa_today,washington_post` | running | - | - | - |
+| `usa_today,washington_post`, bs128 | failed: CUDA OOM | - | - | - |
+| `usa_today,washington_post`, bs64 | running | - | - | - |
 
 详细路径、日志和复现协议见 [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md) 与 [`docs/REPRODUCTION_PROTOCOL.md`](docs/REPRODUCTION_PROTOCOL.md)。网页 demo 的“复现实验指标”标签页也会展示这些结果。
 

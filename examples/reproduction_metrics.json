@@ -43,11 +43,11 @@
     "method": "VDT baseline",
     "feature_setting": "BLIP-2 / GaussianBlur strict",
     "target_domain_arg": "usa_today,washington_post",
-    "status": "running",
+    "status": "failed_oom",
     "started_at": "2026-06-24 20:04:26 Asia/Shanghai",
     "pid": 67464,
     "command": "python -m trainers.train_VDT --batch_size 128 --max_epochs 20 --target_domain usa_today,washington_post --base_model blip-2 --loss_type simclr",
-    "note": "Second strict reproduction run started in background; update metrics after completion.",
+    "note": "Attempted with batch_size=128; failed at Epoch 1 with CUDA out of memory around 2770 iterations. Logs kept for evidence; restarted with batch_size=64.",
     "dataset_sizes": {
       "source_train": 567012,
       "source_validation": 59163,
@@ -55,6 +55,25 @@
       "target_validation": 42931
     },
     "run_dir": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/official_bs128_20ep_usa_today_washington_post",
+    "metrics": null
+  },
+  {
+    "id": "vdt_blip2_strict_usa_today_washington_post_bs64",
+    "method": "VDT baseline",
+    "feature_setting": "BLIP-2 / GaussianBlur strict",
+    "target_domain_arg": "usa_today,washington_post",
+    "status": "running",
+    "started_at": "2026-06-24 20:20 Asia/Shanghai",
+    "pid": 66608,
+    "command": "python -m trainers.train_VDT --batch_size 64 --max_epochs 20 --target_domain usa_today,washington_post --base_model blip-2 --loss_type simclr",
+    "note": "Restarted with batch_size=64 after bs128 OOM; currently running in background.",
+    "dataset_sizes": {
+      "source_train": 567012,
+      "source_validation": 59163,
+      "target_train": 409920,
+      "target_validation": 42931
+    },
+    "run_dir": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/official_bs64_20ep_usa_today_washington_post",
     "metrics": null
   }
 ]
