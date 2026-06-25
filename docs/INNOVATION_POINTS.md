@@ -1,42 +1,85 @@
-# 创新点固定稿
+# 创新点固定稿：实事求是版
 
-## 总体创新
+## 总体定位
 
-在 VDT 跨域 OOC 检测框架基础上，引入事件字段一致性和弱监督错配归因，使系统不仅判断图文是否错配，还能输出“错在哪里”。
+本项目不再声称已经提出一个超过 VDT 的新主分类模型。当前更准确的定位是：
 
-## 创新点 1：事件字段一致性建模
+> **VDT 负责 OOC / Non-OOC 主分类；E3-VDT-OOC 在 VDT 之上提供 COVE-lite true-context attribution，用于输出错配类型、冲突字段、事件分数和结构化解释。**
 
-VDT 主要学习 domain-invariant feature，但没有显式判断图文是否描述同一事件。我们引入五类事件字段：entity、location、time、event-type、relation，形成事件一致性向量：
+## 已完成基础
+
+- 完成 VDT strict BLIP-2/GaussianBlur 两组核心复现；
+- 完成 Gradio demo 与统一 JSON schema；
+- 完成 accuracy-preserving sidecar：解释模块不覆盖 VDT 主分类结果。
+
+## 创新点 1：COVE-lite true-context attribution
+
+现有 VDT 只能输出 `OOC / Non-OOC`，不能说明错在哪里。我们借鉴 COVE 的 context-first 思路，用 VisualNews 原始上下文作为图像真实语境：
 
 ```text
-C_event = [s_entity, s_location, s_time, s_event_type, s_relation]
+current caption vs true image context
 ```
 
-## 创新点 2：弱监督错配类型构造
+再比较五类事件字段：
 
-现有 OOC 数据集通常没有细粒度错配类型标签。我们基于 NewsCLIPpings 构造方式、VisualNews 原始上下文、NER/时间地点抽取、规则与人工抽样校验构造弱监督标签。
+```text
+entity / location / time / event_type / relation
+```
 
-标签集合：entity mismatch、location mismatch、temporal mismatch、event-type mismatch、relation mismatch、context omission、uncertain / evidence insufficient。
+输出：
 
-## 创新点 3：结构化错配归因输出
+```text
+mismatch_type + conflict_fields + event_scores + explanation
+```
 
-输出从二分类扩展为 label + mismatch_type + conflict_fields + event_scores + explanation。相比纯自然语言解释，结构化输出更稳定、更容易评价、更适合答辩展示。
+## 创新点 2：面向无细粒度标签场景的弱归因标签构造
 
-## 创新点 4：Hard Negative 评测协议
+NewsCLIPpings 主要提供二分类标签，缺少 location mismatch、temporal mismatch 等细粒度标签。我们用事件字段冲突生成弱归因标签，但该标签不直接当作真值，必须通过人工评测集验证。
 
-构建 same-topic different-event、same-person different-time、same-location different-event、same-event-type different-location 等高相似错配样本，回应 MUSE 提出的 similarity shortcut 问题。
+## 创新点 3：Accuracy-preserving sidecar
 
+正式策略中：
 
-## 重要约束：分类准确率不降
+```text
+final_label = vdt_label
+final_score = vdt_score
+```
 
-本项目的创新不以牺牲 OOC / Non-OOC 分类准确率为代价。默认采用 **baseline-preserving sidecar**：VDT baseline 负责主分类，事件字段一致性模块负责输出 mismatch type、conflict fields、event scores 和 explanation。这样分类指标可以与 VDT 持平，同时显著增强可解释性。
+事件归因模块只输出解释，不修改主分类。因此分类 Accuracy/F1 与 VDT baseline 持平；新增的是可解释诊断能力。
 
-如果后续尝试 event score 与 VDT score 融合，只有在验证集 Accuracy/F1 不低于 VDT baseline 时才作为主结果；否则只作为消融实验记录。
+## 创新点 4：人工归因评测协议
 
-## 可选创新点：Event-guided TTT
+为了回答“你怎么知道解释是对的”，项目新增人工归因评测集和 baseline 对比：
 
-如果时间允许，在 VDT 的 confidence + variance 伪标签筛选基础上加入 event stability。
+```text
+majority / sampled / text-only / COVE-lite event rule
+```
+
+指标：
+
+```text
+mismatch_type_accuracy
+conflict_field_micro_f1
+conflict_field_macro_f1
+exact_match_rate
+```
+
+只有当 COVE-lite event rule 在人工集上超过简单 baseline，才把归因模块写成有效贡献。
+
+## 可选扩展，不作为当前已完成贡献
+
+- Evidence Gate；
+- Event-Guided TTT；
+- attribution head 训练；
+- 自动 OCR / captioning。
+
+这些可以放在后续工作，不能写成当前已完成主贡献。
 
 ## 不要写成创新点的内容
 
-下载数据、复现 VDT、使用 BLIP-2、做 Gradio demo、报告 Accuracy/F1 都是工程基础，不是核心创新。
+- 下载数据；
+- 复现 VDT；
+- 使用 BLIP-2；
+- 做 Gradio demo；
+- 只报告 Accuracy/F1；
+- 没有人工验证的规则标签。
