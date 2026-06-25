@@ -138,6 +138,12 @@ def prompt_rule(feat: Dict[str, Any]) -> Tuple[str, Set[str], float]:
     }
     if as_float(feat.get("image_loaded")) <= 0:
         return UNCERTAIN_TYPE, {"evidence_insufficient"}, 0.0
+    if not feat.get("clip_enabled"):
+        # Do not turn all-zero CLIP scores into a fake high-confidence benign
+        # decision.  When transformers/torch/CLIP are unavailable, the prompt
+        # similarities are all zero and should be treated as visual evidence
+        # insufficient.
+        return UNCERTAIN_TYPE, {"evidence_insufficient"}, 0.0
     if not sims:
         return UNCERTAIN_TYPE, {"evidence_insufficient"}, 0.2
     field = min(sims, key=sims.get)
@@ -156,6 +162,10 @@ def prompt_rule(feat: Dict[str, Any]) -> Tuple[str, Set[str], float]:
 
 def _is_non_ooc_label(vdt_label: str) -> bool:
     return str(vdt_label).strip().lower() in {"non-ooc", "non_ooc", "non ooc", "benign"}
+
+
+def _is_uncertain_label(vdt_label: str) -> bool:
+    return str(vdt_label).strip().lower() in {"uncertain", "unknown", "insufficient", "evidence_insufficient"}
 
 
 def _present_fields(feat: Dict[str, Any]) -> Set[str]:
@@ -321,6 +331,16 @@ def predict(
         confidence = float(vdt_score)
         source = "vdt_non_ooc_gate"
         model_meta: Dict[str, Any] = {}
+    elif _is_uncertain_label(vdt_label):
+        mismatch_type = UNCERTAIN_TYPE
+        conflict_fields = {"evidence_insufficient"}
+        confidence = float(vdt_score)
+        source = "vdt_uncertain_gate"
+        model_meta = {
+            "model_path": model_path,
+            "model_loaded": False,
+            "skip_reason": "VDT did not classify the sample as OOC; attribution is gated off.",
+        }
     else:
         pred = predict_with_model(feat, Path(model_path))
         if pred is None:
@@ -343,7 +363,7 @@ def predict(
     if mismatch_type == "benign illustrative image":
         explanation = "VDT-CF-Attr 未发现明确字段错配，或 VDT 主分类为 Non-OOC。"
     elif mismatch_type == UNCERTAIN_TYPE:
-        explanation = "图片或视觉语言特征不足，系统不强行解释具体错配类型。"
+        explanation = "VDT 未确认该样本为 OOC，或图片/视觉语言特征不足；系统不进入细粒度归因，也不强行解释具体错配类型。"
     else:
         explanation = f"VDT 判断为 {vdt_label}；VDT-CF-Attr 在不使用 true context 的条件下预测主要错配类型为 {mismatch_type}，冲突字段为 {', '.join(sorted(conflict_fields)) or 'unknown'}。"
 

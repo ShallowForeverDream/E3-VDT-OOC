@@ -35,3 +35,18 @@ def test_no_true_context_infer_can_auto_call_vdt_adapter_without_clip():
     assert obj["auto_vdt"] is not None
     assert obj["auto_vdt"]["label"] in {"OOC", "Non-OOC", "Uncertain"}
     assert obj["vdt_label"] == obj["auto_vdt"]["label"]
+
+
+def test_uncertain_vdt_label_gates_off_attribution():
+    obj = predict_vdt_cf_attr(
+        image_path=str(ROOT / "examples" / "demo_images" / "flood_shanghai_2024.png"),
+        caption="A flood caused evacuations in Shanghai in 2024.",
+        vdt_label="Uncertain",
+        vdt_score=0.5,
+        model_path=str(ROOT / "missing_attr_head.pkl"),
+        device="cpu",
+        no_clip=True,
+    )
+    assert obj["decision_source"] == "vdt_uncertain_gate"
+    assert obj["mismatch_type"] == "uncertain / insufficient visual evidence"
+    assert obj["conflict_fields"] == ["evidence_insufficient"]

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.infer.infer_vdt_cf_attr import UNCERTAIN_TYPE, postprocess_prediction
+from scripts.infer.infer_vdt_cf_attr import UNCERTAIN_TYPE, postprocess_prediction, prompt_rule
 
 
 def _feat(**presence):
@@ -82,3 +82,16 @@ def test_single_field_type_conflict_fields_match_primary_field():
     assert reason == "single_type_primary_field_enforced"
     assert mismatch_type == "location mismatch"
     assert fields == {"location"}
+
+
+def test_prompt_rule_does_not_return_fake_benign_when_clip_disabled():
+    feat = _feat(entity=1, location=1)
+    feat["clip_enabled"] = 0
+    for f in ["entity", "location", "time", "event_type", "relation"]:
+        feat[f"clip_prompt_sim_{f}"] = 0.0
+
+    mismatch_type, fields, confidence = prompt_rule(feat)
+
+    assert mismatch_type == UNCERTAIN_TYPE
+    assert fields == {"evidence_insufficient"}
+    assert confidence == 0.0
