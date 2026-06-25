@@ -5,6 +5,7 @@ import json
 import os
 import socket
 import sys
+import traceback
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -246,25 +247,80 @@ def _empty_card(message: str) -> str:
     """
 
 
+def _normalize_image_input(image_input: Any) -> str | None:
+    """Accept Gradio filepath strings plus dict/list variants seen across versions."""
+    if image_input is None:
+        return None
+    if isinstance(image_input, str):
+        return image_input
+    if isinstance(image_input, dict):
+        for key in ("path", "name", "orig_name"):
+            val = image_input.get(key)
+            if isinstance(val, str) and val:
+                return val
+    if isinstance(image_input, (list, tuple)) and image_input:
+        return _normalize_image_input(image_input[0])
+    return str(image_input) if image_input else None
+
+
+def _short_error(exc: BaseException) -> str:
+    tb = "".join(traceback.format_exception_only(type(exc), exc)).strip()
+    return tb or str(exc)
+
+
+def _predict_with_fallbacks(image_path: str, caption: str) -> Dict[str, Any]:
+    """Run inference with conservative fallbacks so the demo renders a result card.
+
+    First try the configured device.  If CUDA/CLIP fails on a teammate machine,
+    retry on CPU, then retry with CLIP disabled.  The no-CLIP path may output
+    `uncertain`, but it should not crash the front-end during a live demo.
+    """
+    preferred_device = os.environ.get("VDT_CF_ATTR_DEVICE", "cuda")
+    attempts = [
+        (preferred_device, _env_flag("VDT_CF_ATTR_NO_CLIP"), "primary"),
+        ("cpu", _env_flag("VDT_CF_ATTR_NO_CLIP"), "cpu_fallback"),
+        ("cpu", True, "no_clip_fallback"),
+    ]
+    last_exc: BaseException | None = None
+    seen = set()
+    for device, no_clip, source in attempts:
+        key = (device, no_clip)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            obj = predict_vdt_cf_attr(
+                image_path=image_path,
+                caption=caption,
+                vdt_label="auto",
+                model_path=_default_no_true_context_model(),
+                device=device,
+                no_clip=no_clip,
+            )
+            obj.setdefault("demo_runtime", {})
+            obj["demo_runtime"].update({"attempt": source, "device": device, "no_clip": bool(no_clip)})
+            if last_exc is not None:
+                obj["demo_runtime"]["recovered_from_error"] = _short_error(last_exc)
+            return obj
+        except Exception as exc:  # pragma: no cover - hardware/version dependent
+            last_exc = exc
+    raise RuntimeError(_short_error(last_exc) if last_exc else "unknown inference error")
+
 def run_inference(image_path: str | None, caption: str) -> str:
     if predict_vdt_cf_attr is None:
         return _empty_card("后端 infer_vdt_cf_attr.py 导入失败，请检查依赖和仓库路径。")
+    image_path = _normalize_image_input(image_path)
     if not image_path:
         return _empty_card("请上传一张新闻图片。")
+    if not Path(str(image_path)).exists():
+        return _empty_card(f"图片路径不存在或无法读取：{image_path}")
     if not str(caption or "").strip():
         return _empty_card("请输入与图片配对的新闻文本。")
     try:
-        obj = predict_vdt_cf_attr(
-            image_path=str(image_path),
-            caption=str(caption),
-            vdt_label="auto",
-            model_path=_default_no_true_context_model(),
-            device=os.environ.get("VDT_CF_ATTR_DEVICE", "cuda"),
-            no_clip=_env_flag("VDT_CF_ATTR_NO_CLIP"),
-        )
+        obj = _predict_with_fallbacks(str(image_path), str(caption))
         return _result_card(obj)
     except Exception as exc:  # pragma: no cover
-        return _empty_card(f"推理失败：{exc}")
+        return _empty_card(f"推理失败：{_short_error(exc)}。请查看启动 demo 的 PowerShell 终端日志。")
 
 
 CUSTOM_CSS = """
@@ -394,9 +450,32 @@ def build_app():
                     )
             output = gr.HTML(value=_empty_card("上传图片并输入文本后，点击“开始分析”。"))
             gr.HTML("<footer>VDT-CF-Attr · no-true-context image+caption attribution head · true context is not used at inference.</footer>")
-            run_btn.click(fn=run_inference, inputs=[image, caption], outputs=output)
+            run_btn.click(fn=run_inference, inputs=[image, caption], outputs=output, queue=False, show_progress="full")
     return app
 
+
+
+def _maybe_prewarm() -> None:
+    """Load the local demo model once before launch to avoid a slow first click."""
+    flag = os.environ.get("VDT_DEMO_PREWARM", "1").strip().lower()
+    if flag in {"0", "false", "no", "off"}:
+        print("[VDT-CF-Attr] demo prewarm skipped by VDT_DEMO_PREWARM=0")
+        return
+    model_path = Path(_default_no_true_context_model())
+    if not model_path.exists():
+        print(f"[VDT-CF-Attr] demo prewarm skipped: model not found: {model_path}")
+        return
+    examples = _load_examples()
+    if not examples:
+        print("[VDT-CF-Attr] demo prewarm skipped: no example image/caption found")
+        return
+    image_path, caption = examples[0]
+    print("[VDT-CF-Attr] prewarming model/CLIP once; first launch may take 30-60s...")
+    try:
+        _predict_with_fallbacks(str(image_path), str(caption))
+        print("[VDT-CF-Attr] prewarm finished. Open the printed local URL and click examples normally.")
+    except Exception as exc:  # pragma: no cover - environment dependent
+        print(f"[VDT-CF-Attr] prewarm failed but demo will still launch: {_short_error(exc)}")
 
 def _pick_port(host: str, preferred: int) -> int:
     try:
@@ -413,4 +492,6 @@ if __name__ == "__main__":
     preferred_port = int(os.environ.get("PORT", "7860"))
     host = os.environ.get("HOST", "127.0.0.1")
     port = _pick_port(host, preferred_port)
-    build_app().launch(server_name=host, server_port=port, css=CUSTOM_CSS, theme=gr.themes.Base())
+    _maybe_prewarm()
+    print(f"[VDT-CF-Attr] launching demo at http://{host}:{port}")
+    build_app().launch(server_name=host, server_port=port, css=CUSTOM_CSS, theme=gr.themes.Base(), show_error=True)
