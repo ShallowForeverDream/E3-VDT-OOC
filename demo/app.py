@@ -86,6 +86,53 @@ def _status_badge(label: str) -> str:
     return "<span class='badge badge-ooc'>OOC</span>"
 
 
+def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            try:
+                rows.append(json.loads(line))
+            except Exception:
+                pass
+    return rows
+
+
+def _candidate_image_path(raw: str) -> str | None:
+    if not raw:
+        return None
+    p = Path(str(raw))
+    if not p.is_absolute():
+        p = ROOT / p
+    return str(p) if p.exists() else None
+
+
+def _load_examples() -> List[List[str]]:
+    """Load optional demo examples without returning to the old multi-tab UI."""
+    examples: List[List[str]] = []
+    for item in _read_jsonl(ROOT / "outputs" / "no_true_context_attr_demo_cases.jsonl"):
+        image = _candidate_image_path(str(item.get("image") or item.get("image_path") or item.get("demo_image") or ""))
+        caption = str(item.get("caption") or item.get("current_caption") or item.get("text") or "").strip()
+        if image and caption:
+            examples.append([image, caption])
+        if len(examples) >= 8:
+            break
+    if examples:
+        return examples
+
+    fallback = [
+        ("examples/demo_images/london_climate_demonstration_monday.png", "A large protest erupted in Paris on Monday after a new climate policy."),
+        ("examples/demo_images/elon_musk_beijing_2024.png", "Barack Obama will meet officials in Beijing in 2024."),
+        ("examples/demo_images/flood_shanghai_2024.png", "A flood caused evacuations in Shanghai in 2024."),
+    ]
+    for image_raw, caption in fallback:
+        image = _candidate_image_path(image_raw)
+        if image:
+            examples.append([image, caption])
+    return examples
+
+
 def _field_rows(obj: Dict[str, Any]) -> str:
     fs = obj.get("feature_summary") or {}
     prompt_sims = fs.get("prompt_sims") or {}
@@ -222,76 +269,102 @@ def run_inference(image_path: str | None, caption: str) -> str:
 
 CUSTOM_CSS = """
 :root {
-  --bg0: #070b16;
-  --bg1: #0b1020;
-  --card: rgba(255, 255, 255, 0.08);
-  --card-strong: rgba(255, 255, 255, 0.13);
-  --line: rgba(255, 255, 255, 0.14);
-  --text: #edf3ff;
-  --muted: #94a3b8;
-  --brand: #7dd3fc;
-  --brand2: #a78bfa;
-  --ok: #34d399;
-  --warn: #fbbf24;
-  --danger: #fb7185;
+  --page: #f7f8fb;
+  --page2: #eef3ff;
+  --card: rgba(255, 255, 255, 0.72);
+  --card-strong: rgba(255, 255, 255, 0.88);
+  --line: rgba(15, 23, 42, 0.10);
+  --text: #0f172a;
+  --muted: #64748b;
+  --brand: #2563eb;
+  --brand-soft: #dbeafe;
+  --brand2: #7c3aed;
+  --ok: #059669;
+  --warn: #d97706;
+  --danger: #e11d48;
 }
 .gradio-container {
   background:
-    radial-gradient(circle at 15% 10%, rgba(125, 211, 252, .20), transparent 32%),
-    radial-gradient(circle at 85% 20%, rgba(167, 139, 250, .18), transparent 30%),
-    linear-gradient(135deg, var(--bg0), var(--bg1)) !important;
+    radial-gradient(circle at 8% 8%, rgba(37, 99, 235, .12), transparent 34%),
+    radial-gradient(circle at 88% 15%, rgba(124, 58, 237, .10), transparent 30%),
+    linear-gradient(135deg, #ffffff 0%, var(--page) 44%, var(--page2) 100%) !important;
   color: var(--text) !important;
   min-height: 100vh;
 }
-#main-shell { max-width: 1180px; margin: 0 auto; padding: 52px 28px 64px; }
+#main-shell { max-width: 1120px; margin: 0 auto; padding: 56px 28px 70px; }
 .hero { margin-bottom: 28px; }
-.hero .kicker { color: var(--brand); letter-spacing: .12em; text-transform: uppercase; font-size: 12px; font-weight: 700; }
-.hero h1 { font-size: clamp(34px, 5vw, 64px); line-height: 1.04; margin: 8px 0 14px; color: var(--text); }
-.hero p { max-width: 760px; color: var(--muted); font-size: 16px; line-height: 1.7; }
-.input-panel { background: var(--card); border: 1px solid var(--line); border-radius: 28px; padding: 24px; backdrop-filter: blur(22px); box-shadow: 0 24px 80px rgba(0, 0, 0, .30); }
-.input-panel label, .input-panel .label-wrap span { color: var(--text) !important; }
-.input-panel textarea, .input-panel input { background: rgba(15, 23, 42, .64) !important; color: var(--text) !important; border-color: var(--line) !important; }
-#run-btn { border-radius: 999px !important; min-height: 48px; font-weight: 800; background: linear-gradient(135deg, var(--brand), var(--brand2)) !important; color: #05111f !important; border: 0 !important; }
-.result-card { margin-top: 24px; background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.075)); border: 1px solid var(--line); border-radius: 30px; padding: 28px; color: var(--text); box-shadow: 0 30px 90px rgba(0,0,0,.34); backdrop-filter: blur(26px); }
+.hero .kicker { color: var(--brand); letter-spacing: .12em; text-transform: uppercase; font-size: 12px; font-weight: 800; }
+.hero h1 { font-size: clamp(34px, 5vw, 60px); line-height: 1.05; margin: 10px 0 16px; color: var(--text); letter-spacing: -0.04em; }
+.hero p { max-width: 760px; color: var(--muted); font-size: 16px; line-height: 1.75; }
+.input-panel {
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 30px;
+  padding: 26px;
+  backdrop-filter: blur(24px);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .10);
+}
+.input-panel label, .input-panel .label-wrap span { color: var(--text) !important; font-weight: 750 !important; }
+.input-panel textarea, .input-panel input {
+  background: rgba(255, 255, 255, .82) !important;
+  color: var(--text) !important;
+  border-color: rgba(15, 23, 42, .12) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72) !important;
+}
+#run-btn { border-radius: 999px !important; min-height: 48px; font-weight: 850; background: linear-gradient(135deg, var(--brand), var(--brand2)) !important; color: #fff !important; border: 0 !important; box-shadow: 0 14px 28px rgba(37, 99, 235, .24) !important; }
+.examples-title { margin-top: 18px; color: var(--text); font-size: 14px; font-weight: 850; }
+.examples-hint { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.input-panel .examples, .input-panel .gradio-examples { background: rgba(255,255,255,.62) !important; border-radius: 20px !important; border: 1px solid rgba(15,23,42,.08) !important; padding: 10px !important; }
+.result-card {
+  margin-top: 24px;
+  background: linear-gradient(180deg, rgba(255,255,255,.88), rgba(255,255,255,.64));
+  border: 1px solid rgba(255,255,255,.82);
+  border-radius: 32px;
+  padding: 30px;
+  color: var(--text);
+  box-shadow: 0 30px 90px rgba(15,23,42,.12);
+  backdrop-filter: blur(28px);
+}
 .card-topline { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 22px; }
-.eyebrow { color: var(--brand); letter-spacing: .10em; font-size: 11px; text-transform: uppercase; font-weight: 800; margin: 0 0 8px; }
-.result-card h2 { margin: 0; font-size: 26px; color: var(--text); }
-.badge { border-radius: 999px; padding: 9px 14px; font-weight: 900; font-size: 13px; border: 1px solid var(--line); }
-.badge-ooc { background: rgba(251, 113, 133, .18); color: #fecdd3; }
-.badge-ok { background: rgba(52, 211, 153, .16); color: #bbf7d0; }
-.badge-warn { background: rgba(251, 191, 36, .16); color: #fde68a; }
+.eyebrow { color: var(--brand); letter-spacing: .10em; font-size: 11px; text-transform: uppercase; font-weight: 850; margin: 0 0 8px; }
+.result-card h2 { margin: 0; font-size: 26px; color: var(--text); letter-spacing: -0.02em; }
+.badge { border-radius: 999px; padding: 9px 14px; font-weight: 900; font-size: 13px; border: 1px solid var(--line); background: rgba(255,255,255,.72); }
+.badge-ooc { color: var(--danger); background: rgba(225, 29, 72, .08); }
+.badge-ok { color: var(--ok); background: rgba(5, 150, 105, .08); }
+.badge-warn { color: var(--warn); background: rgba(217, 119, 6, .10); }
 .metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 18px 0 24px; }
-.metric-box { background: rgba(15, 23, 42, .58); border: 1px solid var(--line); border-radius: 22px; padding: 18px; min-height: 108px; }
-.metric-box.accent { background: linear-gradient(135deg, rgba(125, 211, 252, .18), rgba(167, 139, 250, .18)); }
+.metric-box { background: rgba(255,255,255,.76); border: 1px solid rgba(15,23,42,.08); border-radius: 24px; padding: 18px; min-height: 110px; box-shadow: 0 10px 28px rgba(15,23,42,.05); }
+.metric-box.accent { background: linear-gradient(135deg, rgba(219,234,254,.86), rgba(237,233,254,.86)); }
 .metric-label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 10px; }
 .metric-box strong { display: block; font-size: 23px; line-height: 1.2; color: var(--text); }
 .metric-box small { display: block; color: var(--muted); margin-top: 6px; }
 .section-title { font-weight: 900; margin: 0 0 12px; color: var(--text); }
 .table-wrap, .explain-box { margin-top: 18px; }
-.field-table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 18px; background: rgba(15, 23, 42, .48); }
-.field-table th, .field-table td { padding: 13px 14px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.10); color: var(--text); }
-.field-table th { color: #cbd5e1; font-size: 13px; font-weight: 800; background: rgba(255,255,255,.055); }
+.field-table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 20px; background: rgba(255,255,255,.74); border: 1px solid rgba(15,23,42,.07); }
+.field-table th, .field-table td { padding: 13px 14px; text-align: left; border-bottom: 1px solid rgba(15,23,42,.07); color: var(--text); }
+.field-table th { color: #334155; font-size: 13px; font-weight: 850; background: rgba(248,250,252,.86); }
 .field-table tr:last-child td { border-bottom: 0; }
-.pill { display: inline-flex; border-radius: 999px; padding: 5px 10px; background: rgba(148, 163, 184, .16); color: #cbd5e1; font-size: 12px; font-weight: 800; }
-.pill-conflict { background: rgba(251, 113, 133, .18); color: #fecdd3; }
-.pill-present { background: rgba(125, 211, 252, .16); color: #bae6fd; }
-.explain-box { background: rgba(15, 23, 42, .42); border: 1px solid var(--line); border-radius: 22px; padding: 18px; }
-.explain-box p { color: #dbeafe; line-height: 1.7; margin: 0 0 12px; }
+.pill { display: inline-flex; border-radius: 999px; padding: 5px 10px; background: rgba(100,116,139,.10); color: #475569; font-size: 12px; font-weight: 850; }
+.pill-conflict { background: rgba(225, 29, 72, .10); color: var(--danger); }
+.pill-present { background: rgba(37, 99, 235, .10); color: var(--brand); }
+.explain-box { background: rgba(255,255,255,.70); border: 1px solid rgba(15,23,42,.08); border-radius: 24px; padding: 18px; }
+.explain-box p { color: #334155; line-height: 1.75; margin: 0 0 12px; }
 .meta-line { display: flex; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
-.meta-line span { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; }
+.meta-line span { border: 1px solid rgba(15,23,42,.08); border-radius: 999px; padding: 6px 10px; background: rgba(248,250,252,.72); }
 .raw-json { margin-top: 18px; color: var(--muted); }
-.raw-json summary { cursor: pointer; color: #cbd5e1; font-weight: 800; }
-.raw-json pre { white-space: pre-wrap; background: rgba(2, 6, 23, .72); color: #dbeafe; padding: 16px; border-radius: 18px; border: 1px solid var(--line); max-height: 360px; overflow: auto; }
+.raw-json summary { cursor: pointer; color: #334155; font-weight: 850; }
+.raw-json pre { white-space: pre-wrap; background: rgba(248,250,252,.86); color: #0f172a; padding: 16px; border-radius: 18px; border: 1px solid rgba(15,23,42,.08); max-height: 360px; overflow: auto; }
 .placeholder-card { min-height: 210px; display: flex; flex-direction: column; justify-content: center; }
 .placeholder-card p:last-child { color: var(--muted); font-size: 16px; }
 .muted { color: var(--muted) !important; }
 footer { color: var(--muted); text-align: center; margin-top: 24px; font-size: 12px; }
 @media (max-width: 860px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } .card-topline { flex-direction: column; } }
-@media (max-width: 560px) { .metrics-grid { grid-template-columns: 1fr; } #main-shell { padding: 32px 14px 46px; } }
+@media (max-width: 560px) { .metrics-grid { grid-template-columns: 1fr; } #main-shell { padding: 34px 14px 46px; } }
 """
 
 
 def build_app():
+    examples = _load_examples()
     with gr.Blocks(title="VDT-CF-Attr") as app:
         with gr.Column(elem_id="main-shell"):
             gr.HTML(
@@ -311,6 +384,14 @@ def build_app():
                     lines=4,
                 )
                 run_btn = gr.Button("开始分析", elem_id="run-btn")
+                if examples:
+                    gr.HTML("<div class='examples-title'>可选示例</div><div class='examples-hint'>点击任一示例即可自动填入图片与新闻文本。</div>")
+                    gr.Examples(
+                        examples=examples,
+                        inputs=[image, caption],
+                        label=None,
+                        examples_per_page=8,
+                    )
             output = gr.HTML(value=_empty_card("上传图片并输入文本后，点击“开始分析”。"))
             gr.HTML("<footer>VDT-CF-Attr · no-true-context image+caption attribution head · true context is not used at inference.</footer>")
             run_btn.click(fn=run_inference, inputs=[image, caption], outputs=output)
