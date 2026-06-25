@@ -1,0 +1,36 @@
+{
+  "records": 100,
+  "completed": 100,
+  "duplicate_sample_ids": [],
+  "type_distribution": {
+    "different-event mismatch": 85,
+    "entity mismatch": 10,
+    "location mismatch": 3,
+    "context omission": 1,
+    "event-type mismatch": 1
+  },
+  "field_distribution": {
+    "entity": 94,
+    "event_type": 74,
+    "relation": 69,
+    "location": 57,
+    "time": 33,
+    "context_omission": 1,
+    "evidence_insufficient": 1
+  },
+  "domain_distribution": {
+    "guardian": 40,
+    "usa_today": 29,
+    "washington_post": 16,
+    "bbc": 15
+  },
+  "batch_distribution": {
+    "batch1": 50,
+    "batch2": 50
+  },
+  "rationale_warning_counts": {
+    "missing_rationale": 100
+  },
+  "dominant_type": "different-event mismatch",
+  "dominant_type_ratio": 0.85
+}

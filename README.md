@@ -233,6 +233,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_attr_expe
 
 本地五类训练分布为 `none/entity/location/time/different-event = 1000/1000/1000/1000/987`。最好模型为 `logistic_regression_no_true_context`，test 上 **Type Acc 0.4011 / Field Micro-F1 0.5841**。其中 `different-event mismatch` 的 recall 为 0.2025，说明已经接入五类训练，但完全错配与单字段错配的区分仍需更强特征和人工真实 OOC 评测。
 
+## 导入真实 OOC 100 条人工归因评测集
+
+两批中文人工标注表可导入为标准 JSONL/CSV：
+
+```powershell
+python scripts\eval\import_real_ooc_manual_annotations.py
+python scripts\eval\evaluate_real_ooc_attribution.py `
+  --gold examples\real_ooc_attribution_eval_set.jsonl `
+  --predictions outputs\field_nli_attribution_v2.jsonl `
+  --output outputs\real_ooc_attribution_eval_metrics.json
+python scripts\collect_v2_report_tables.py --output outputs\report_tables_v2.md
+```
+
+当前 100 条真实 OOC 人工标注显示：`different-event mismatch` 占 **85%**，冲突字段以 `entity/event_type/relation/location/time` 多字段复合冲突为主。这说明真实 OOC 不是单纯地点/时间/人物单字段错配，因此报告中应把它作为“人工分析反过来修正训练数据构造”的证据。
+
 ## 队友先看什么
 
 1. [`docs/PROJECT_NEXT_STEPS_COVE_LITE.md`](docs/PROJECT_NEXT_STEPS_COVE_LITE.md)

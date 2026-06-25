@@ -43,6 +43,13 @@ def read_jsonl(path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
+def read_json_first(paths: List[Path]) -> Dict[str, Any]:
+    for path in paths:
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+    return {}
+
+
 def _load_legacy_examples():
     rows = []
     for item in read_jsonl(ROOT / "examples" / "demo_cases.jsonl"):
@@ -351,8 +358,8 @@ def render_experiment_board() -> str:
         "| VDT strict baseline | ✅ 已完成两组核心复现 | `examples/reproduction_metrics.json` | 可汇报分类 baseline 指标 |",
         "| 系统演示集 smoke test | ✅ 已完成 | `examples/cove_attr_demo_outputs.json` | 证明系统闭环和 UI 样例一致 |",
         "| COVE-lite context coverage | ⚠️ 脚本已准备，路径待队友复核 | `scripts/context/build_cove_lite_context_pairs.py` | 答辩后补全 VisualNews metadata 路径后跑 |",
-        "| 人工 attribution gold set | ⚠️ 标注表已生成/部分待复核 | `examples/annotation_*_中文.csv` | 需要人工确认，不把弱标签当真 |",
-        "| Attribution ablation | ⚠️ 脚本已准备，最终结果待跑 | `scripts/eval/run_attribution_baselines.py` | 比较 majority/random/rule/NLI/evidence relevance |",
+        "| 真实 OOC 人工 gold set | ✅ 已导入 100 条 | `examples/real_ooc_attribution_eval_set.jsonl` | 可用于真实 OOC 归因评估；仍需补 10–15 条自然语言理由做展示 |",
+        "| Attribution ablation | ✅ 已跑真实 OOC oracle 辅助评估 | `examples/real_ooc_manual_eval_metrics.json` | 当前结果说明 different-event 泛化仍弱，是后续优化依据 |",
         "| NLI/LLM extractor | 规划中 | `vdt_cove_attr_package/` | 作为答辩后增强，不冒充已完成 |",
         "",
         "## 已有本地输出提醒",
@@ -366,6 +373,40 @@ def render_experiment_board() -> str:
             lines.append("- `outputs/report_tables.md` 已存在，可用于后续报告表格。")
     else:
         lines.append("- 尚未生成大规模实验 report_tables。")
+    stats = read_json_first([
+        ROOT / "outputs" / "real_ooc_manual_label_stats.json",
+        ROOT / "examples" / "real_ooc_manual_100_summary.json",
+    ])
+    metrics = read_json_first([
+        ROOT / "outputs" / "real_ooc_attribution_eval_metrics.json",
+        ROOT / "examples" / "real_ooc_manual_eval_metrics.json",
+    ])
+    if stats:
+        lines += [
+            "",
+            "## 真实 OOC 人工标注 100 条",
+            "",
+            f"- Gold set size：**{stats.get('records', 0)}**，completed：**{stats.get('completed', 0)}**。",
+            f"- 主导错配类型：**{stats.get('dominant_type', '-')}**，占比 **{float(stats.get('dominant_type_ratio', 0.0)):.0%}**。",
+            f"- 类型分布：`{stats.get('type_distribution', {})}`",
+            f"- 字段分布：`{stats.get('field_distribution', {})}`",
+            f"- 域分布：`{stats.get('domain_distribution', {})}`",
+        ]
+        warn = stats.get("rationale_warning_counts", {})
+        if warn.get("missing_rationale") or warn.get("numeric_rationale"):
+            lines.append(f"- 标注理由提醒：`{warn}`；这些样本可用于指标计算，但答辩案例还需要补 10–15 条自然语言理由。")
+    if metrics and metrics.get("methods"):
+        lines += [
+            "",
+            "## 真实 OOC 100 条评估结果（true-context/oracle 辅助设置）",
+            "",
+            "| Method | Matched | Type Acc | Field Micro-F1 | Exact Match |",
+            "|---|---:|---:|---:|---:|",
+        ]
+        for name, res in metrics.get("methods", {}).items():
+            lines.append(f"| {name} | {res.get('matched', 0)} | {float(res.get('mismatch_type_accuracy', 0.0)):.4f} | {float(res.get('conflict_field_micro_f1', 0.0)):.4f} | {float(res.get('exact_match_rate', 0.0)):.4f} |")
+        lines.append("")
+        lines.append("> 注意：这张表使用人工 gold set 评估 true-context/oracle 辅助归因方法；no-true-context image+caption head 需要单独构造图像特征后再评估，不能混写。")
     return "\n".join(lines)
 
 

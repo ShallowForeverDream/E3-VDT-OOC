@@ -1,0 +1,77 @@
+{
+  "gold": "examples\\real_ooc_attribution_eval_set.jsonl",
+  "gold_records_done": 100,
+  "predictions": "outputs\\field_nli_attribution_v2.jsonl",
+  "attr_head_model": "outputs\\counterfactual\\attribution_head_model.pkl",
+  "methods": {
+    "rule_sidecar": {
+      "matched": 100,
+      "missing_predictions": 0,
+      "mismatch_type_accuracy": 0.08,
+      "conflict_field_micro_precision": 0.9320388349514563,
+      "conflict_field_micro_recall": 0.2917933130699088,
+      "conflict_field_micro_f1": 0.44444444444444436,
+      "conflict_field_macro_f1": 0.18745553854774652,
+      "exact_match_rate": 0.05,
+      "type_confusion_top": {
+        "different-event mismatch -> entity mismatch": 60,
+        "different-event mismatch -> benign illustrative image": 14,
+        "entity mismatch -> entity mismatch": 8,
+        "different-event mismatch -> location mismatch": 5,
+        "different-event mismatch -> temporal mismatch": 4,
+        "entity mismatch -> benign illustrative image": 2,
+        "location mismatch -> entity mismatch": 2,
+        "different-event mismatch -> event-type mismatch": 2,
+        "location mismatch -> temporal mismatch": 1,
+        "context omission -> entity mismatch": 1,
+        "event-type mismatch -> benign illustrative image": 1
+      }
+    },
+    "field_wise_nli": {
+      "matched": 100,
+      "missing_predictions": 0,
+      "mismatch_type_accuracy": 0.27,
+      "conflict_field_micro_precision": 0.8758620689655172,
+      "conflict_field_micro_recall": 0.3860182370820669,
+      "conflict_field_micro_f1": 0.5358649789029536,
+      "conflict_field_macro_f1": 0.30278386990563244,
+      "exact_match_rate": 0.06,
+      "type_confusion_top": {
+        "different-event mismatch -> location mismatch": 21,
+        "different-event mismatch -> different-event mismatch": 19,
+        "different-event mismatch -> entity mismatch": 19,
+        "different-event mismatch -> benign illustrative image": 15,
+        "different-event mismatch -> temporal mismatch": 9,
+        "entity mismatch -> entity mismatch": 5,
+        "different-event mismatch -> event-type mismatch": 2,
+        "entity mismatch -> location mismatch": 2,
+        "location mismatch -> location mismatch": 2,
+        "location mismatch -> temporal mismatch": 1,
+        "context omission -> entity mismatch": 1,
+        "event-type mismatch -> event-type mismatch": 1,
+        "entity mismatch -> event-type mismatch": 1,
+        "entity mismatch -> benign illustrative image": 1,
+        "entity mismatch -> different-event mismatch": 1
+      }
+    },
+    "counterfactual_trained_attr_head": {
+      "matched": 100,
+      "missing_predictions": 0,
+      "mismatch_type_accuracy": 0.08,
+      "conflict_field_micro_precision": 0.8727272727272727,
+      "conflict_field_micro_recall": 0.2917933130699088,
+      "conflict_field_micro_f1": 0.43735763097949887,
+      "conflict_field_macro_f1": 0.1489247311827957,
+      "exact_match_rate": 0.06,
+      "type_confusion_top": {
+        "different-event mismatch -> entity mismatch": 66,
+        "different-event mismatch -> location mismatch": 19,
+        "entity mismatch -> entity mismatch": 8,
+        "location mismatch -> entity mismatch": 3,
+        "entity mismatch -> location mismatch": 2,
+        "context omission -> entity mismatch": 1,
+        "event-type mismatch -> entity mismatch": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+method,matched,missing_predictions,mismatch_type_accuracy,conflict_field_micro_f1,conflict_field_macro_f1,exact_match_rate
+rule_sidecar,100,0,0.08,0.44444444444444436,0.18745553854774652,0.05
+field_wise_nli,100,0,0.27,0.5358649789029536,0.30278386990563244,0.06
+counterfactual_trained_attr_head,100,0,0.08,0.43735763097949887,0.1489247311827957,0.06
