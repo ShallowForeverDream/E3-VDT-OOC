@@ -1,87 +1,151 @@
-# VDT-CF-Attr 全流程深度讲稿：基于可控反事实训练的图文错配原因解释
+# VDT-CF-Attr 全流程深度讲稿（最新版）：基于可控反事实训练的图文错配原因解释
 
-> 版本定位：这是对旧版 `VDT-COVE-Attr-模块方法深挖版.md` 的彻底修正。  
-> 旧版主线是“用 true image context 与 current caption 比较，然后直接输出错配原因”。  
-> 新版主线是：**true context 只用于训练数据构造和评估参考，推理阶段不依赖 true context；模型只输入 image + current caption，在 VDT 判断 OOC 后输出错配原因。**
->
-> 推荐新名称：**VDT-CF-Attr**  
-> 中文：**基于可控反事实训练的 VDT 图文错配归因方法**  
-> 其中 CF = Controlled Counterfactual。
+> 更新时间：2026-06-26  
+> 面向对象：队友分工、答辩讲解、系统演示前统一口径。  
+> 当前仓库：`D:\MY_PROJECT\OOC\E3-VDT-OOC`  
+> 当前 GitHub main 最新提交：以仓库 `main` 为准。
 
 ---
 
-## 0. 一句话讲清楚我们现在到底做什么
+## 0. 先说结论：原讲稿哪些地方需要修正
 
-我们的系统分两层：
+原来的 `VDT-CF-Attr-全流程深度讲稿.md` 主方向是对的：
 
 ```text
-第一层：VDT
-输入 image + current_caption
-输出 OOC / Non-OOC
+true context 只用于训练构造和评估参考，推理阶段不依赖 true context。
+最终系统输入 image + current_caption，先由 VDT 判断是否 OOC，再做错配归因。
+```
+
+但原稿有几处已经过时，必须修正后再发给队友：
+
+1. **实验不是“待跑”了**：no-true-context、five-class、plus2000 different-event、真实 OOC 100 条评估都已经有结果。
+2. **类别不是只做三类/四类了**：当前稳定版本是五类主标签：
+   ```text
+   benign illustrative image
+   entity mismatch
+   location mismatch
+   temporal mismatch
+   different-event mismatch
+   ```
+3. **必须写清楚 VDT 的边界**：
+   - strict VDT/BLIP-2 baseline 是离线复现实验；
+   - 网页 demo 里的 `VDTAdapter` 是 VDT-compatible 自动后端，不等同于完整官方 BLIP-2 VDT checkpoint 在线推理。
+4. **必须写清楚系统门控**：只有 VDT 判断为 OOC 时才进入归因；Non-OOC / Uncertain 不强行解释。
+5. **必须写清楚队友演示不需要原始数据集**：只跑网页演示不需要 `VisualNews origin.tar`、NewsCLIPpings 和 `configs/paths.local.yaml`，只需要 demo artifact。
+6. **必须诚实说明效果**：plus2000 后真实 OOC 100 条指标明显提升，但仍不能说“已经可靠解决真实 OOC 归因”。
+
+下面是修正版讲稿，可以直接发给队友。
+
+---
+
+## 1. 一句话讲清楚我们现在到底做什么
+
+我们的系统是两层结构：
+
+```text
+第一层：VDT / VDTAdapter 主分类
+输入：image + current_caption
+输出：OOC / Non-OOC / Uncertain
 回答：图文是否错配？
 
-第二层：VDT-CF-Attr
-输入 image + current_caption + VDT score
-输出 mismatch_type + conflict_fields
+第二层：VDT-CF-Attr 归因模块
+输入：image + current_caption + VDT label/score
+输出：mismatch_type + conflict_fields + confidence
 回答：如果错配，主要错在哪里？
 ```
 
-最重要的修正是：
+最核心的要求是：
 
 ```text
 推理阶段不输入 true_image_context。
 ```
 
-如果推理阶段还要输入 true context，那么系统本质上就是：
-
-```text
-current_caption vs true_context 比较
-```
-
-这当然可以做解释，但实际应用价值受限，因为真实场景中通常没有图片原始上下文。我们提出可控反事实训练，就是为了让模型在训练阶段利用原始匹配样本构造监督信号，最终在推理阶段只凭 **图片与当前文本的多模态关系** 判断错配原因。
+也就是说，最终演示页只让用户上传图片并输入当前新闻文本，不需要用户提供图片的原始新闻上下文。
 
 ---
 
-## 1. 研究背景：为什么 VDT 还不够
+## 2. 系统总流程
 
-### 1.1 OOC 任务是什么
-
-Out-of-Context misinformation 指的是：图片本身可能是真的，文本也可能是真的，但二者被错误配对，形成误导。例如：
+### 2.1 最终应用流程
 
 ```text
-图片：2019 年伦敦抗议现场
-文本：2024 年巴黎抗议现场
+image + current_caption
+        ↓
+VDT / VDTAdapter 判断 OOC / Non-OOC / Uncertain
+        ↓
+如果 Non-OOC：输出 benign illustrative image，不进入归因
+如果 Uncertain：输出 uncertain / insufficient visual evidence，不强行归因
+如果 OOC：进入 VDT-CF-Attr attribution head
+        ↓
+Attribution Head 基于 image-caption 特征输出错配类型
+        ↓
+mismatch_type + conflict_fields + confidence + explanation
 ```
 
-图片和文本都像新闻，但不是同一事件。
+### 2.2 为什么要先 VDT 再归因
 
-### 1.2 VDT 做了什么
-
-VDT 是我们保留的主分类 baseline。它解决的是：
+因为归因模块回答的是：
 
 ```text
-image + caption -> OOC / Non-OOC
+如果这对图文已经被判定为错配，那么主要错在哪里？
 ```
 
-它关注跨域 OOC 检测，例如不同新闻机构、不同新闻领域下的泛化。VDT 的价值在于主分类性能，而不是细粒度解释。
+它不是主分类器，不应该覆盖 VDT 的二分类结果。因此当前实现中有明确门控：
 
-### 1.3 VDT 没有解决什么
+| VDT 输出 | 归因模块行为 |
+|---|---|
+| `OOC` | 进入 attribution head，输出具体错配原因 |
+| `Non-OOC` | 直接输出 `benign illustrative image` |
+| `Uncertain` | 直接输出 `uncertain / insufficient visual evidence` |
 
-VDT 不能直接告诉我们：
-
-```text
-错的是人物？
-错的是地点？
-错的是时间？
-错的是事件类型？
-还是整件事都错？
-```
-
-所以我们在 VDT 后面做 attribution head。
+这个设计是为了避免系统在证据不足时胡乱解释。
 
 ---
 
-## 2. 旧版路线为什么要修正
+## 3. VDT 与 VDTAdapter 的准确口径
+
+这是答辩和队友演示时最容易被问到的地方，必须统一口径。
+
+### 3.1 我们完成了什么 VDT 复现
+
+我们已经完成 VDT strict BLIP-2/GaussianBlur baseline 的核心离线复现：
+
+| 实验 | 状态 | F1 | Acc | AUC |
+|---|---|---:|---:|---:|
+| `bbc,guardian`, bs128 | completed | 0.7353 | 0.7383 | 0.7398 |
+| `usa_today,washington_post`, bs128 | CUDA OOM | - | - | - |
+| `usa_today,washington_post`, bs64 | completed | 0.8032 | 0.8032 | 0.8028 |
+
+这些结果是离线训练/评估日志里的 strict baseline 复现结果。
+
+### 3.2 网页 demo 里为什么不用完整官方 VDT checkpoint
+
+网页 demo 里调用的是：
+
+```text
+src/e3vdt/inference/vdt_adapter.py
+```
+
+它是一个 **VDT-compatible 自动后端**，作用是让网页不再要求用户手动填写 `VDT label / score`。
+
+它的加载顺序大致是：
+
+```text
+1. 如果本机有 no-true-context features，就训练轻量二分类 feature-head
+2. 否则尝试 CLIP image-caption similarity fallback
+3. 如果是 COVE/oracle 页面且有 image_context，则用事件一致性 fallback
+4. 如果证据不足，则输出 Uncertain
+```
+
+所以答辩时要这样说：
+
+> 我们 strict 复现了 VDT baseline；系统 demo 中的在线主分类由 VDTAdapter 自动提供 VDT-compatible label/score，用于替代前端手填。当前没有声称网页已经完整接入官方 BLIP-2 VDT checkpoint 在线推理。
+
+这个说法最安全，也最符合当前代码。
+
+---
+
+## 4. 为什么旧版 COVE/true-context 路线要降级为 oracle
 
 旧版路线是：
 
@@ -92,986 +156,313 @@ image + current_caption
   ↓
 current_caption vs true_image_context
   ↓
-NLI / graph alignment
+NLI / graph alignment / rule
   ↓
 输出 mismatch_type
 ```
 
-这个路线可以作为 **oracle / upper-bound / baseline**，但不能作为最终系统，原因是：
-
-### 2.1 推理阶段依赖 true context
-
-如果新图片来自数据集外，我们没有 VisualNews `image_id -> original caption` 映射，就无法得到 true context。此时系统不能解释。
-
-### 2.2 解释能力来自外部原始上下文，不是模型自己学到的图文归因
-
-旧版方法更像：
+这个思路不是完全错误，它可以作为：
 
 ```text
-拿当前文本和原始文本比差异
+oracle / upper bound / 构造和评测辅助
 ```
 
-而不是：
+但它不能作为最终应用路线，原因是：
 
-```text
-模型根据图片内容和当前文本判断哪里不一致
-```
+1. 数据集外图片不一定有 VisualNews `image_id -> original caption` 映射；
+2. 如果推理阶段依赖 true context，系统就不是“看图和当前文本判断错配原因”，而是“拿当前文本和原始文本比差异”；
+3. 真实应用中用户通常只给图片和当前新闻文本，不会给原图原始新闻上下文。
 
-### 2.3 true context 可以用于训练和评估，但不能作为最终推理输入
-
-新版明确规定：
+因此新版明确规定：
 
 | 用途 | 是否允许使用 true context |
 |---|---:|
 | 构造反事实训练样本 | 允许 |
-| 人工标注真实 OOC 评测集 | 允许作为参考 |
-| 训练模型输入特征 | 不允许作为最终主方法 |
-| 推理阶段输入 | 不允许 |
-| oracle baseline / upper bound | 允许，但必须单独标注 |
+| 构造/分析人工 gold set | 允许作为标注参考 |
+| COVE-lite oracle baseline | 允许，但必须单独标注 |
+| 最终 no-true-context 推理 | 不允许 |
+| 网页最终演示页 | 不允许 |
 
 ---
 
-## 3. 新版总体路线
+## 5. 训练数据怎么构造
 
-新版完整流程分为两个阶段：训练阶段和推理阶段。
-
-### 3.1 训练阶段
+原始 NewsCLIPpings 主要提供的是：
 
 ```text
-原始 non-OOC 匹配样本
-(image I, caption T, label=0)
-        ↓
-抽取 caption 中可编辑字段和 span
+OOC / Non-OOC 二分类标签
+```
+
+它没有直接告诉我们：
+
+```text
+错的是人物、地点、时间，还是整件事完全不同？
+```
+
+所以我们用两类方法构造错配归因标签。
+
+---
+
+## 6. 第一类训练样本：从 Non-OOC 构造单字段反事实
+
+### 6.1 为什么从 Non-OOC 出发
+
+Non-OOC 样本本来是图文匹配的：
+
+```text
+image I 与 caption T 匹配
+```
+
+如果只替换 caption 里的一个字段，就能得到一个错配原因确定的样本。
+
+例子：
+
+```text
+原始 caption：Biden spoke in Washington in 2024.
+替换地点：Washington -> Paris
+编辑后：Biden spoke in Paris in 2024.
+```
+
+此时我们知道错配原因是：
+
+```text
+location mismatch
+```
+
+### 6.2 当前稳定实现的三种单字段编辑
+
+当前实现主要做三类可控编辑：
+
+| edit_type | gold_mismatch_type | gold_conflict_fields |
+|---|---|---|
+| `entity_swap` | `entity mismatch` | `entity` |
+| `location_swap` | `location mismatch` | `location` |
+| `time_swap` | `temporal mismatch` | `time` |
+
+此外保留原始 Non-OOC 作为正样本：
+
+| edit_type | gold_mismatch_type | gold_conflict_fields |
+|---|---|---|
+| `none` | `benign illustrative image` / `none` | 空 |
+
+### 6.3 字段抽取与替换
+
+当前实现使用：
+
+```text
+spaCy NER + 年份正则 + 标题短语规则
+```
+
+抽取字段包括：
+
+```text
 entity / location / time
-        ↓
-只替换一个字段，生成 edited_caption T'
-        ↓
-得到可控 OOC 负样本
-(image I, edited_caption T', mismatch_type = 被替换字段)
-        ↓
-用 image + edited_caption 提取多模态特征
-        ↓
-训练 Attribution Head
 ```
 
-### 3.2 推理阶段
+其中 time 第一版主要做年份替换，因为年份 span 稳定、语法破坏少。
 
-```text
-输入 image I + current_caption T
-        ↓
-VDT 判断 OOC / Non-OOC
-        ↓
-若 Non-OOC：输出 none / benign
-若 OOC：进入 Attribution Head
-        ↓
-Attribution Head 只基于 image + current_caption 特征
-        ↓
-输出 mismatch_type + conflict_fields + confidence
-```
-
-### 3.3 新版核心主张
-
-```text
-反事实样本用于提供细粒度监督标签；
-Attribution Head 学习 image-caption 字段冲突模式；
-推理时不依赖 true context。
-```
-
----
-
-## 4. 模块 A：可控反事实样本构造
-
-### 4.1 这个模块解决什么问题
-
-原始 NewsCLIPpings 只有二分类标签：
-
-```text
-OOC / Non-OOC
-```
-
-没有：
-
-```text
-location mismatch
-temporal mismatch
-entity mismatch
-```
-
-所以不能直接监督训练解释模块。我们需要自己构造带确定错配原因的样本。
-
-### 4.2 为什么从 non-OOC 样本出发
-
-只选择原本匹配的样本：
-
-```json
-{
-  "image_id": "...",
-  "caption": "Biden spoke in Washington in 2024.",
-  "label": 0
-}
-```
-
-因为只有原本匹配时，我们才能保证：
-
-```text
-图片 I 与原始 caption T 是一致的。
-```
-
-如果我们把 T 中的一个字段改掉，例如地点：
-
-```text
-Biden spoke in Paris in 2024.
-```
-
-那么新样本的错配原因就是可控的：
-
-```text
-location mismatch
-```
-
-原始 OOC 样本不能直接用于细粒度监督，因为它可能同时有人物、地点、时间、事件类型多种冲突。
-
-### 4.3 字段抽取：从 caption 找到可编辑对象
-
-我们先从 caption 中抽取三类字段：
-
-```text
-entity
-location
-time
-```
-
-第一版不做 event_type / relation，因为它们更难稳定编辑。
-
-#### 输入
-
-```text
-Biden spoke in Washington in 2024.
-```
-
-#### 抽取结果
-
-```json
-{
-  "entities": [
-    {"text": "Biden", "type": "PERSON", "start": 0, "end": 5}
-  ],
-  "locations": [
-    {"text": "Washington", "type": "GPE", "start": 15, "end": 25}
-  ],
-  "times": [
-    {"text": "2024", "type": "YEAR", "start": 29, "end": 33}
-  ]
-}
-```
-
-这里必须有 span：
-
-```text
-start / end
-```
-
-因为我们不是重新生成整句话，而是在原句中做最小替换。
-
-### 4.4 span 为什么重要
-
-如果只知道：
-
-```text
-locations = ["Washington"]
-```
-
-但不知道它在句子哪里，就很难保证只改一个字段。span 能保证：
+替换不是让大模型重写句子，而是做 span-level 最小编辑：
 
 ```text
 原句前半部分 + replacement + 原句后半部分
 ```
 
-例如：
-
-```text
-caption[:15] + "Paris" + caption[25:]
-```
-
-得到：
-
-```text
-Biden spoke in Paris in 2024.
-```
-
-### 4.5 replacement pool 如何建立
-
-replacement pool 不是手写几个词，而是从训练集 non-OOC 样本中自动抽取。
-
-#### entity pool
-
-按类型分组：
-
-```text
-PERSON: Biden, Trump, Macron, Sunak
-ORG: UN, NATO, WHO
-GPE/NORP: United States, France, China
-```
-
-替换规则：
-
-```text
-PERSON -> PERSON
-ORG -> ORG
-GPE -> GPE
-```
-
-禁止：
-
-```text
-Biden -> Paris
-UN -> 2024
-```
-
-#### location pool
-
-收集地点实体：
-
-```text
-Paris, London, Washington, Tokyo, Beijing, Gaza, New York
-```
-
-替换规则：
-
-```text
-location -> different location
-```
-
-如果能区分城市/国家更好：
-
-```text
-city -> city
-country -> country
-```
-
-第一版至少保证 GPE/LOC/FAC 内替换。
-
-#### time pool
-
-第一版只做年份：
-
-```text
-2018, 2019, 2020, 2021, 2022, 2023, 2024
-```
-
-原因：年份替换稳定、span 清楚、不会破坏语法。
-
-暂时不建议做复杂日期：
-
-```text
-Monday -> Friday
-January -> March
-June 5 -> July 9
-```
-
-因为可能引入语义和语法问题。
-
-### 4.6 单字段反事实编辑
-
-每个负样本只改一个字段。
-
-#### location_swap
-
-原句：
-
-```text
-Biden spoke in Washington in 2024.
-```
-
-替换：
-
-```text
-Washington -> Paris
-```
-
-结果：
-
-```text
-Biden spoke in Paris in 2024.
-```
-
-标签：
-
-```json
-{
-  "label": 1,
-  "gold_mismatch_type": "location mismatch",
-  "gold_conflict_fields": ["location"],
-  "edit_type": "location_swap"
-}
-```
-
-#### time_swap
-
-```text
-2024 -> 2020
-```
-
-结果：
-
-```text
-Biden spoke in Washington in 2020.
-```
-
-标签：
-
-```json
-{
-  "label": 1,
-  "gold_mismatch_type": "temporal mismatch",
-  "gold_conflict_fields": ["time"],
-  "edit_type": "time_swap"
-}
-```
-
-#### entity_swap
-
-```text
-Biden -> Trump
-```
-
-结果：
-
-```text
-Trump spoke in Washington in 2024.
-```
-
-标签：
-
-```json
-{
-  "label": 1,
-  "gold_mismatch_type": "entity mismatch",
-  "gold_conflict_fields": ["entity"],
-  "edit_type": "entity_swap"
-}
-```
-
-### 4.7 正样本保留
-
-原本 non-OOC 样本也要保留：
-
-```json
-{
-  "label": 0,
-  "gold_mismatch_type": "none",
-  "gold_conflict_fields": [],
-  "edit_type": "none"
-}
-```
-
-这样模型不仅学习“错在哪里”，也学习“没有错配时不要乱解释”。
-
-### 4.8 构造后校验
-
-反事实样本不能替换完就直接用，必须自动校验。
-
-校验项包括：
-
-```text
-1. target_field_changed
-   目标字段确实变化。
-
-2. replacement_type_valid
-   替换词类型一致，例如 PERSON 换 PERSON。
-
-3. edited_caption_valid
-   新句子非空、长度合理、没有乱码。
-
-4. other_fields_preserved
-   非目标字段尽量没有改变。
-
-5. duplicate_check
-   edited_caption 不应大量重复。
-
-6. group_split_check
-   同一个 source_sample_id 不能同时出现在 train/val/test。
-```
-
-最重要的是 group split。否则同一原始样本的不同替换版本如果同时出现在训练集和测试集，模型会虚高。
-
-### 4.9 输出格式
-
-```json
-{
-  "sample_id": "cf_000001",
-  "source_sample_id": "orig_123",
-  "image_id": "img_456",
-  "image_path": "...",
-
-  "original_caption": "Biden spoke in Washington in 2024.",
-  "edited_caption": "Biden spoke in Paris in 2024.",
-
-  "label": 1,
-  "gold_mismatch_type": "location mismatch",
-  "gold_conflict_fields": ["location"],
-  "edit_type": "location_swap",
-
-  "edit_span": {
-    "field": "location",
-    "old": "Washington",
-    "new": "Paris",
-    "start": 15,
-    "end": 25
-  },
-
-  "split": "train"
-}
-```
+这样能最大程度保证只有一个字段变化。
 
 ---
 
-## 5. 模块 B：不依赖 true context 的特征构造
+## 7. 第二类训练样本：从原始 OOC 筛选 different-event mismatch
 
-### 5.1 旧特征为什么要改
+### 7.1 为什么要加入原始 OOC
 
-旧版 feature vector 包含：
-
-```text
-current_caption vs true_context NLI
-true_context field overlap
-true_context graph alignment
-```
-
-这会导致推理阶段必须输入 true_context。
-
-新版必须改为：
+人工标注 100 条真实 OOC 后，我们发现真实 OOC 很多不是单字段错配，而是：
 
 ```text
-image + current_caption features
+人物、地点、事件类型、关系等多字段一起错
 ```
 
-### 5.2 新版特征总览
-
-Attribution Head 的输入特征应该来自：
+也就是更接近：
 
 ```text
-1. 全局图文匹配特征
-2. 字段级 prompt grounding 特征
-3. 字段存在性和类型特征
-4. VDT score / VDT intermediate features
-5. 可选视觉描述一致性特征
+different-event mismatch
 ```
 
-这些都不需要 true context。
+如果训练集只有单字段反事实，模型会倾向把真实 OOC 错判成 entity/time/location 单字段错配。
+
+### 7.2 我们如何筛选原始 OOC
+
+不是把所有原始 OOC 都粗暴标成 different-event，而是只选择明显低相似、低重合的 OOC：
+
+```text
+NewsCLIPpings similarity_score <= 0.65
+caption 与 true_image_context token Jaccard <= 0.08
+caption / true_context 至少 4 个 token
+```
+
+并且排除人工评测集，避免训练/测试泄漏：
+
+```text
+exclude examples/real_ooc_attribution_eval_set.jsonl
+按 sample_id / text_id / image_id / source_sample_id 排除
+```
+
+本轮统计：
+
+```text
+manual_gold_overlap = 94
+```
+
+说明有 94 条候选原始 OOC 与人工 gold set 有重合，被排除出训练。
+
+### 7.3 当前 plus2000 训练分布
+
+当前最新版训练集目录：
+
+```text
+outputs/no_true_context_attr_5way_plus2000/
+```
+
+数据分布为：
+
+| Label | Count |
+|---|---:|
+| benign illustrative image / none | 1000 |
+| entity mismatch | 1000 |
+| location mismatch | 1000 |
+| temporal mismatch | 1000 |
+| different-event mismatch | 3000 |
+
+总计：
+
+```text
+7000 条
+```
+
+其中 different-event 是在旧五类约 1000 条基础上额外加入约 2000 条原始 OOC。
+
+### 7.4 数据划分与泄漏检查
+
+按 source/image/text 分组划分：
+
+| Split | Rows |
+|---|---:|
+| train | 4989 |
+| val | 1013 |
+| test | 998 |
+
+泄漏检查结果：
+
+```text
+source_sample_id leakage = 0
+image_id leakage = 0
+text_id leakage = 0
+cross_split duplicate edited_caption = 0
+```
+
+这点很重要：同一原始样本的不同反事实版本不能同时出现在 train/test，否则指标会虚高。
 
 ---
 
-## 6. 模块 C：全局图文匹配特征
+## 8. no-true-context 特征构造
 
-### 6.1 这个模块做什么
-
-用冻结视觉语言模型判断：
+最终模型推理阶段不能使用 true context，所以特征只来自：
 
 ```text
-image 与 caption 整体是否匹配
+image + current_caption + VDT score
 ```
 
-例如用 CLIP：
+当前脚本：
 
 ```text
-image_embedding = CLIP_image_encoder(image)
-text_embedding = CLIP_text_encoder(caption)
-global_similarity = cosine(image_embedding, text_embedding)
+scripts/features/build_image_caption_attribution_features.py
 ```
 
-### 6.2 输入输出
+### 8.1 当前实际使用的特征
 
-输入：
+主要包括：
+
+#### 1. 图像加载状态
 
 ```text
-image I
-caption T
+image_loaded
 ```
 
-输出：
-
-```json
-{
-  "clip_global_similarity": 0.31
-}
-```
-
-### 6.3 它有什么用
-
-如果整体相似度很低，说明图文可能错配。
-
-但它不能告诉我们错在哪里，所以只是基础特征。
-
-### 6.4 为什么不能只靠它
-
-MUSE 相关工作提醒：相似度 shortcut 在 OOC 任务中很强，但它关注的是表面相似度，不一定判断事实矛盾。我们的 attribution head 不能只使用 global similarity，否则可能只学会“像不像”，而不是“哪里错”。
-
----
-
-## 7. 模块 D：字段级 prompt grounding 特征
-
-这是新版最关键的模块。
-
-### 7.1 这个模块解决什么问题
-
-我们需要知道 caption 中每个字段是否被图片支持。
-
-caption：
-
-```text
-Biden spoke in Paris in 2024.
-```
-
-字段：
-
-```text
-entity: Biden
-location: Paris
-time: 2024
-event_type: politics
-relation: spoke
-```
-
-我们希望分别问图片：
-
-```text
-图片像不像“Biden”？
-图片像不像“Paris”？
-图片像不像“2024”？
-图片像不像“political speech”？
-```
-
-这就是 field-aware grounding。
-
-### 7.2 如何构造 prompt
-
-对每个字段构造自然语言 prompt。
-
-#### entity prompt
-
-```text
-a photo involving {entity}
-a news photo of {entity}
-a photo showing {entity}
-```
-
-例：
-
-```text
-a photo involving Biden
-```
-
-#### location prompt
-
-```text
-a photo taken in {location}
-a news photo from {location}
-a scene in {location}
-```
-
-例：
-
-```text
-a photo taken in Paris
-```
-
-#### time prompt
-
-```text
-a news photo from {time}
-a photo taken in {time}
-```
-
-例：
-
-```text
-a news photo from 2024
-```
-
-注意：时间字段从图片本身很难判断，所以 time prompt 可信度低，后面必须允许 uncertain。
-
-#### event_type prompt
-
-```text
-a photo of a {event_type}
-a news photo about {event_type}
-```
-
-例：
-
-```text
-a photo of a protest
-```
-
-#### relation prompt
-
-```text
-a photo of people {relation}
-a photo showing {relation}
-```
-
-例：
-
-```text
-a photo of people protesting
-```
-
-### 7.3 如何计算 grounding score
-
-用冻结 CLIP 或类似模型：
-
-```text
-s_field = cosine(CLIP_image(image), CLIP_text(prompt_field))
-```
-
-例如：
-
-```json
-{
-  "entity_prompt_sim": 0.42,
-  "location_prompt_sim": 0.18,
-  "time_prompt_sim": 0.05,
-  "event_type_prompt_sim": 0.51,
-  "relation_prompt_sim": 0.48
-}
-```
-
-### 7.4 如何解释这些分数
-
-如果 caption 是：
-
-```text
-Biden spoke in Paris in 2024.
-```
-
-图像实际是 Washington 演讲现场，可能出现：
-
-```text
-entity_prompt_sim(Biden) 高
-event_type_prompt_sim(political speech) 高
-location_prompt_sim(Paris) 低
-```
-
-Attribution Head 学到：
-
-```text
-entity 支持、事件类型支持，但地点不支持
-=> location mismatch
-```
-
-### 7.5 它为什么不依赖 true context
-
-因为所有分数都是从：
-
-```text
-image + current_caption fields
-```
-
-得到的，不需要原始 caption 或 true context。
-
-### 7.6 局限
-
-图片不一定包含地点或时间证据。
-
-例如普通街景很难判断是 Paris 还是 London；普通新闻图很难判断年份。因此系统要允许：
-
-```text
-uncertain / insufficient visual evidence
-```
-
----
-
-## 8. 模块 E：字段存在性与编辑类型无关特征
-
-为了让模型知道当前 caption 中包含哪些字段，需要加入字段存在性特征：
-
-```text
-has_entity
-has_location
-has_time
-has_event_type
-has_relation
-num_entities
-num_locations
-num_times
-```
-
-例如：
-
-```json
-{
-  "has_entity": 1,
-  "has_location": 1,
-  "has_time": 1,
-  "num_entities": 1,
-  "num_locations": 1,
-  "num_times": 1
-}
-```
-
-作用：
-
-```text
-如果 caption 中没有时间字段，就不应该输出 temporal mismatch。
-```
-
----
-
-## 9. 模块 F：VDT 分数和中间特征
-
-### 9.1 VDT score
-
-VDT 输出：
-
-```json
-{
-  "vdt_label": "OOC",
-  "vdt_score": 0.87
-}
-```
-
-Attribution Head 可以使用：
+#### 2. VDT 分数
 
 ```text
 vdt_score
-vdt_label_onehot
 ```
 
-作用：
+当前训练中反事实样本默认给一个 VDT score，真实系统推理时由 VDTAdapter 自动给出。
+
+#### 3. caption 基础特征
 
 ```text
-VDT score 高，说明图文整体不一致概率高。
+caption_chars
+caption_tokens
 ```
 
-### 9.2 VDT embedding，可选
-
-如果能从 VDT 取中间层 multimodal embedding，可以加入：
+#### 4. 字段存在性特征
 
 ```text
-vdt_multimodal_embedding
+entity_count / entity_present
+location_count / location_present
+time_count / time_present
+event_type_count / event_type_present
+relation_count / relation_present
 ```
 
-但第一版可以先不用，避免工程复杂。
+这些特征用于约束模型不要输出 caption 中不存在的字段。
 
----
-
-## 10. 模块 G：视觉描述一致性特征（可选）
-
-### 10.1 为什么需要
-
-某些字段 CLIP prompt 不够稳定，可以让图像 captioning 模型先生成视觉描述：
+#### 5. CLIP 全局图文相似度
 
 ```text
-image -> visual_caption
+clip_caption_sim
 ```
 
-例如：
+表示图片和整句 caption 的整体相似度。
+
+#### 6. 字段级 prompt grounding 相似度
+
+对每个字段构造 prompt：
 
 ```text
-A man speaking at a podium in front of flags.
+entity:     a news photo involving {entity}
+location:   a news photo taken in {location}
+time:       a news photo from {time}
+event_type: a news photo about {event_type}
+relation:   a news photo showing {relation}
 ```
 
-然后比较：
+然后计算：
 
 ```text
-current_caption vs visual_caption
+clip_prompt_sim_entity
+clip_prompt_sim_location
+clip_prompt_sim_time
+clip_prompt_sim_event_type
+clip_prompt_sim_relation
 ```
 
-注意：visual_caption 不是 true context。它是从图片像素生成的视觉描述，不依赖 VisualNews metadata。
-
-### 10.2 如何使用
-
-从 visual_caption 抽事件字段：
+以及：
 
 ```text
-visual_caption_event
+clip_prompt_sim_min_present
+clip_prompt_sim_mean_present
+clip_prompt_sim_max_present
 ```
 
-从 current_caption 抽事件字段：
+### 8.2 需要注意的限制
+
+CLIP 对地点、时间、具体人物的判断能力有限，尤其是：
 
 ```text
-text_event
+图片很难看出年份
+普通街景很难判断具体城市
+人物脸不清楚时很难确认实体
 ```
 
-计算：
-
-```text
-entity_overlap
-location_overlap
-event_type_overlap
-relation_overlap
-```
-
-### 10.3 局限
-
-图像 captioning 模型通常不可靠识别具体人物、地点和时间。因此它只能作为辅助特征。
-
----
-
-## 11. 模块 H：Attribution Head
-
-### 11.1 它是什么
-
-Attribution Head 是一个轻量监督分类器。
-
-它不是 VDT，不是 CLIP，不是大模型。它学习的是：
-
-```text
-image-caption 多模态特征模式 -> 错配类型
-```
-
-### 11.2 输入
-
-新版输入不包含 true context。输入向量可以写成：
-
-```text
-x = [
-  global_image_text_similarity,
-  entity_prompt_sim,
-  location_prompt_sim,
-  time_prompt_sim,
-  event_type_prompt_sim,
-  relation_prompt_sim,
-  field_presence_features,
-  VDT score,
-  optional visual_caption_consistency_features
-]
-```
-
-### 11.3 输出
-
-两个输出头：
-
-#### mismatch_type head
-
-```text
-none
-location mismatch
-temporal mismatch
-entity mismatch
-uncertain
-```
-
-第一版建议只做：
-
-```text
-none
-location mismatch
-temporal mismatch
-entity mismatch
-```
-
-#### conflict_fields head
-
-```text
-entity
-location
-time
-```
-
-### 11.4 模型结构
-
-第一版可以是 MLP：
-
-```text
-input features
-  -> Linear
-  -> ReLU
-  -> Dropout
-  -> Linear
-  -> mismatch_type logits
-```
-
-多标签字段头：
-
-```text
-input features
-  -> Linear
-  -> ReLU
-  -> Dropout
-  -> Linear
-  -> conflict_fields logits
-```
-
-### 11.5 损失函数
-
-```text
-L = CE(mismatch_type) + λ * BCE(conflict_fields)
-```
-
-其中：
-
-```text
-CE: 多分类交叉熵
-BCE: 多标签二元交叉熵
-λ: 默认 1.0
-```
-
-### 11.6 为什么它能泛化
-
-因为它不是记住某条 caption，而是学习规律：
-
-```text
-当某类字段的视觉 grounding 分数异常低，而其他字段相对正常时，通常对应这个字段的错配。
-```
-
-例如：
-
-```text
-location prompt similarity 低
-entity prompt similarity 高
-event_type prompt similarity 高
-=> location mismatch
-```
-
----
-
-## 12. 数据集外样本为什么可以输出错配类型
-
-### 12.1 前提
-
-新版推理只需要：
-
-```text
-image + current_caption
-```
-
-不需要：
-
-```text
-true_image_context
-```
-
-因此对数据集外图片也可以运行。
-
-### 12.2 推理流程
-
-```text
-输入外部 image + caption
-        ↓
-VDT 或其他 OOC detector 判断是否 OOC
-        ↓
-抽取 caption 字段
-        ↓
-构造 field prompts
-        ↓
-计算 image 与每个 prompt 的 grounding score
-        ↓
-Attribution Head 输出 mismatch_type
-```
-
-### 12.3 必须诚实说明的限制
-
-如果图片本身无法提供足够证据，例如：
-
-```text
-时间字段：图片看不出是 2020 还是 2024
-地点字段：普通街景看不出是 Paris 还是 London
-实体字段：人脸不可见或模型不认识人物
-```
-
-系统应该输出：
+所以系统必须允许：
 
 ```text
 uncertain / insufficient visual evidence
@@ -1081,269 +472,477 @@ uncertain / insufficient visual evidence
 
 ---
 
-## 13. 训练集、验证集、测试集划分
+## 9. Attribution Head 当前实现
 
-### 13.1 group split
-
-必须按 `source_sample_id` 划分。
-
-错误做法：
+当前训练脚本：
 
 ```text
-同一个原始样本的 location_swap 在 train
-time_swap 在 test
+scripts/train/train_no_true_context_attribution_head.py
 ```
 
-这会导致数据泄漏。
+### 9.1 它不是大模型
 
-正确做法：
+Attribution Head 是轻量监督分类器。当前实现不是重新训练 VDT，也不是训练 BLIP-2，而是在抽取好的 image-caption 特征上训练分类头。
+
+### 9.2 当前输出
+
+主类型输出：
 
 ```text
-同一个 source_sample_id 产生的所有变体都进入同一个 split。
+benign illustrative image
+entity mismatch
+location mismatch
+temporal mismatch
+different-event mismatch
 ```
 
-### 13.2 推荐比例
+字段输出支持：
 
 ```text
-train: 70%
-val: 15%
-test: 15%
+entity
+location
+time
+event_type
+relation
 ```
 
-### 13.3 泄漏检查
+注意：`different-event mismatch` 默认代表多字段、事件级不一致。代码里对 different-event 的默认字段映射以 `entity/location/event_type` 为主，但真实人工标注中也可能包含 `relation/time`，这也是当前模型仍需改进的地方。
 
-检查项：
+### 9.3 当前比较的模型/消融
 
-```text
-source_sample_id 跨 split 数量 = 0
-image_id 跨 split 数量 = 0 或单独报告
-edited_caption 重复数量
-类别分布
-```
+训练脚本会比较：
 
----
-
-## 14. 实验设计
-
-### 14.1 反事实生成质量
-
-| Edit type | Generated | Kept | Keep rate |
-|---|---:|---:|---:|
-| location_swap | 待跑 | 待跑 | 待跑 |
-| time_swap | 待跑 | 待跑 | 待跑 |
-| entity_swap | 待跑 | 待跑 | 待跑 |
-
-### 14.2 Synthetic held-out test
-
-模型在反事实测试集上的结果：
-
-| Method | Uses true context at inference? | Type Acc | Field Micro-F1 | Exact Match |
-|---|---|---:|---:|---:|
-| Majority | No | 待跑 | 待跑 | 待跑 |
-| Global CLIP similarity | No | 待跑 | 待跑 | 待跑 |
-| Field prompt grounding | No | 待跑 | 待跑 | 待跑 |
-| Attribution Head | No | 待跑 | 待跑 | 待跑 |
-| COVE-lite oracle | Yes | 待跑 | 待跑 | 待跑 |
-
-注意：COVE-lite oracle 可以做，但要单独标注 `Uses true context = Yes`，不能和最终模型混在一起。
-
-### 14.3 学习曲线
-
-| MaxPerType | Train size | Type Acc | Field Micro-F1 | Exact Match |
-|---:|---:|---:|---:|---:|
-| 80 | 待跑 | 待跑 | 待跑 | 待跑 |
-| 200 | 待跑 | 待跑 | 待跑 | 待跑 |
-| 1000 | 待跑 | 待跑 | 待跑 | 待跑 |
-| 3000 | 待跑 | 待跑 | 待跑 | 待跑 |
-
-### 14.4 消融实验
-
-| Variant | 目的 |
+| Method | 作用 |
 |---|---|
-| w/o field prompt grounding | 验证字段级视觉对齐是否有效 |
-| w/o VDT score | 验证 VDT 分数是否有帮助 |
-| w/o field presence | 验证字段存在性特征是否有帮助 |
-| only global similarity | 验证相似度 shortcut baseline |
-| full attribution head | 完整模型 |
+| `majority` | 多数类 baseline |
+| `field_prompt_grounding_rule` | 不训练模型，只用 prompt 相似度规则 |
+| `logistic_regression_no_true_context` | 轻量 LR head |
+| `mlp_no_clip_prompt` | 去掉 CLIP prompt 特征的消融 |
+| `mlp_no_field_presence` | 去掉字段存在性特征的消融 |
+| `attr_head_image_caption_mlp` | 当前完整 MLP head |
 
-### 14.5 真实 OOC 人工评估
-
-构建人工评测集：
-
-```text
-examples/real_ooc_attribution_eval_set.jsonl
-```
-
-标注字段：
-
-```text
-gold_mismatch_type
-gold_conflict_fields
-rationale
-```
-
-推理时不输入 true context；标注时可以参考 true context。
+当前保存的是综合指标最好的模型。
 
 ---
 
-## 15. 当前旧实验结果如何重新解释
+## 10. 推理阶段实现细节
 
-你们之前跑出的：
-
-```text
-attribution head MLP Type Acc = 0.9268
-Field Micro-F1 = 0.9474
-```
-
-如果它使用了 `current_caption vs true_context` 的 NLI/evidence/graph 特征，那么它应被重新命名为：
-
-```text
-COVE-lite oracle-feature Attribution Head
-```
-
-它不能作为最终 no-true-context 模型结果。
-
-正确写法：
-
-```text
-在 oracle-feature 设置下，使用 true context 相关特征的 attribution head 在 synthetic test 上取得较高结果；这说明反事实标签可学习。但最终系统需要进一步替换为不依赖 true context 的 image-caption feature head。
-```
-
-也就是说，这个结果不是废掉，而是变成：
-
-```text
-oracle upper-bound / feasibility proof
-```
-
----
-
-## 16. Codex 需要实现的新脚本
-
-### 16.1 图文特征构造
-
-```text
-scripts/features/build_image_caption_attribution_features.py
-```
-
-输入：
-
-```text
-counterfactual_attribution_train.jsonl
-counterfactual_attribution_val.jsonl
-counterfactual_attribution_test.jsonl
-image root / image path mapping
-```
-
-禁止使用：
-
-```text
-true_image_context
-true_context_event
-current_caption vs true_context NLI
-```
-
-允许使用：
-
-```text
-image embedding
-text embedding
-CLIP image-text similarity
-field prompt image similarity
-VDT score
-visual caption features
-field presence features
-```
-
-输出：
-
-```text
-attribution_features_train.csv
-attribution_features_val.csv
-attribution_features_test.csv
-```
-
-### 16.2 训练脚本修改
-
-现有：
-
-```text
-scripts/train/train_attribution_head.py
-```
-
-需要支持读取 CSV 特征，而不是只从 JSONL 中读 true_context 相关特征。
-
-### 16.3 推理脚本
+当前推理脚本：
 
 ```text
 scripts/infer/infer_vdt_cf_attr.py
 ```
 
-输入：
+默认模型路径：
 
 ```text
---image path/to/image.jpg
---caption "..."
+outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl
 ```
 
-输出：
+### 10.1 命令行示例
 
-```json
-{
-  "vdt_label": "OOC",
-  "mismatch_type": "location mismatch",
-  "conflict_fields": ["location"],
-  "confidence": 0.82,
-  "uses_true_context": false
-}
+```powershell
+python scripts\infer\infer_vdt_cf_attr.py `
+  --image outputs\no_true_context_attr_demo_images\1073067__cf_entity_316_0.jpg `
+  --caption "Believe it or not Ronnie Bigg thanked the fans of Boston on his way out of Beantown"
 ```
 
----
-
-## 17. 答辩讲稿
-
-可以这样讲：
-
-> 我们一开始考虑利用 VisualNews 的原始上下文作为 true context，直接比较当前 caption 和 true context 来解释错配原因。但这种方式的问题是，推理阶段仍然依赖图片原始上下文；如果输入一张数据集外图片，系统无法保证拿到 true context。因此我们进一步提出基于可控反事实训练的 VDT-CF-Attr。训练阶段，我们只从 non-OOC 匹配样本出发，对 caption 中的实体、地点或时间做单字段最小编辑，生成带有确定错配原因的 OOC 反事实样本。推理阶段，Attribution Head 不再输入 true context，而是基于 image-caption 的多模态特征、字段级 prompt grounding 特征和 VDT score 输出错配类型。这样系统可以在没有原始上下文的外部样本上进行错配原因预测；如果图片本身无法提供足够视觉证据，则输出 uncertain。
-
----
-
-## 18. 最终边界
-
-必须明确：
+默认：
 
 ```text
-我们不是说模型能在任何情况下都准确判断错配原因。
+--vdt-label auto
 ```
 
-它能判断的前提是：
+会先调用 `VDTAdapter` 自动给出 OOC / Non-OOC / Uncertain。
+
+### 10.2 后处理约束
+
+推理时有字段存在性后处理：
 
 ```text
-1. VDT 或主分类器已经判断图文可能错配；
-2. caption 中有可抽取字段；
-3. 图片中有足够视觉证据支持或反驳这些字段；
-4. 模型训练中见过类似字段冲突模式。
+如果 caption 中没有 time 字段，就不应该输出 temporal mismatch。
+如果 caption 中没有 entity 字段，就不应该输出 entity mismatch。
+如果 different-event 只剩一个有效字段，则降级为对应单字段 mismatch。
+如果没有有效视觉证据，则输出 uncertain。
 ```
 
-对于时间、地点这类不一定能从图片直接看出的字段，必须允许：
+这个后处理解决了 demo 里“模型说错字段但文本里没有该字段”的尴尬问题。
+
+### 10.3 CLIP 不可用时如何处理
+
+旧版本有一个问题：CLIP 全零时，prompt rule 可能给出接近 1.0 的 benign 置信度。这个已经修复。
+
+现在如果 CLIP/torch/transformers 不可用，系统会输出：
 
 ```text
 uncertain / insufficient visual evidence
 ```
 
+而不是假装自己很确定。
+
 ---
 
-## 19. 最终一句话总结
+## 11. 当前实验结果
+
+### 11.1 VDT strict baseline 复现结果
+
+| 实验 | 状态 | F1 | Acc | AUC |
+|---|---|---:|---:|---:|
+| `bbc,guardian`, bs128 | completed | 0.7353 | 0.7383 | 0.7398 |
+| `usa_today,washington_post`, bs128 | CUDA OOM | - | - | - |
+| `usa_today,washington_post`, bs64 | completed | 0.8032 | 0.8032 | 0.8028 |
+
+这部分是主分类 baseline 复现，不是归因模块指标。
+
+### 11.2 old no-true-context scaling 结果
+
+在不加入大量 original OOC different-event 的设置下，`MaxPerType=1000` 时：
+
+| Method | Type Acc | Field Micro-F1 | Exact Match |
+|---|---:|---:|---:|
+| logistic regression no-true-context | 0.5275 | 0.5719 | 0.3250 |
+
+这说明 no-true-context 路线可运行，并且随数据规模增大有提升。
+
+### 11.3 五类 original OOC 初版结果
+
+加入约 987 条 filtered original OOC 作为 `different-event mismatch` 后：
+
+| Method | Type Acc | Field Micro-F1 | Exact Match |
+|---|---:|---:|---:|
+| logistic_regression_no_true_context | 0.4011 | 0.5841 | 0.3257 |
+
+但 different-event recall 仍较弱，所以我们继续做 plus2000 增强。
+
+### 11.4 plus2000 different-event 增强结果
+
+当前最终训练分布：
 
 ```text
-VDT-CF-Attr 的核心不是用 true context 直接比较文本，而是利用 true context 和 non-OOC 样本在训练阶段构造可控反事实监督信号，训练一个推理阶段只依赖 image + current_caption 的 attribution head，从而在 VDT 判断 OOC 后输出可能的错配原因。
+none/entity/location/time/different-event = 1000/1000/1000/1000/3000
+```
+
+合成 held-out test：
+
+| Method | Type Acc | Field Micro-F1 | Exact Match |
+|---|---:|---:|---:|
+| majority | 0.4669 | 0.7012 | 0.4669 |
+| logistic_regression_no_true_context | 0.3317 | 0.6655 | 0.4228 |
+| attr_head_image_caption_mlp | **0.5220** | 0.6876 | 0.3487 |
+
+注意：由于 test 中 different-event 占比高，majority 的部分指标不低。因此这张表不能单独证明真实泛化，只说明 MLP 在类型准确率上超过多数类。
+
+### 11.5 真实 OOC 人工 100 条 no-true-context 评估
+
+这是更关键的评估，因为它看真实 OOC 泛化。
+
+| Model | Type Acc | Field Micro-F1 | Exact Match | 说明 |
+|---|---:|---:|---:|---|
+| `no_true_context_attr_5way_1000` | 0.0900 | 0.3276 | 0.0300 | different-event 只预测 6 条 |
+| `no_true_context_attr_5way_plus2000` | **0.2900** | **0.4781** | 0.0300 | different-event 预测 33 条 |
+
+结论要实事求是：
+
+```text
+plus2000 训练分布修正明显提升了真实 OOC 归因表现，
+但 Type Acc=0.29 仍不高，说明真实 OOC 归因还没有完全解决。
+```
+
+这正好支持我们的研究叙事：
+
+```text
+先发现真实 OOC 多为 different-event，
+再调整训练分布加入更多原始 OOC，
+最后真实 OOC 指标确实改善。
 ```
 
 ---
 
-## 20. 参考文献方向
+## 12. 系统演示怎么讲
 
-1. NewsCLIPpings: Automatic Generation of Out-of-Context Multimodal Media.
-2. VDT: Out-of-Context Misinformation Detection via Variational Domain-Invariant Learning with Test-Time Training.
-3. COVE: COntext and VEracity prediction for out-of-context images.
-4. Counterfactually Augmented Data: Learning the Difference that Makes a Difference with Counterfactually-Augmented Data.
-5. Similarity over Factuality / MUSE: Are we making progress on multimodal out-of-context misinformation detection?
+### 12.1 最终演示入口
+
+网页里最重要的 tab 是：
+
+```text
+VDT-CF-Attr 无 true context
+```
+
+这个页面只输入：
+
+```text
+新闻图片 / Image
+Current caption / 当前新闻文本
+```
+
+不输入：
+
+```text
+true_image_context
+VDT label / score
+```
+
+系统会自动：
+
+```text
+1. 调用 VDTAdapter 得到 OOC / Non-OOC / Uncertain
+2. 如果 OOC，加载 no_true_context_attr_head.pkl 做归因
+3. 输出 mismatch_type、conflict_fields、confidence、evidence_status
+```
+
+### 12.2 当前默认模型加载顺序
+
+```text
+outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl
+→ outputs/no_true_context_attr_5way_1000/no_true_context_attr_head.pkl
+→ outputs/no_true_context_attr/no_true_context_attr_head.pkl
+→ field-prompt grounding rule fallback
+```
+
+### 12.3 队友只跑演示需要什么
+
+队友只跑网页演示时，不需要：
+
+```text
+configs/paths.local.yaml
+VisualNews 原图 / origin.tar
+NewsCLIPpings 原始数据
+VDT/BLIP-2 checkpoint
+```
+
+只需要：
+
+```text
+GitHub 源码
+Python 依赖
+组长发的 demo artifact zip
+```
+
+当前 artifact：
+
+```text
+artifacts/e3-vdt-ooc-demo-artifact.zip
+```
+
+里面包含：
+
+```text
+outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl
+outputs/no_true_context_attr_5way_plus2000/image_caption_features_*.csv
+outputs/no_true_context_attr_demo_cases.jsonl
+outputs/no_true_context_attr_demo_images/
+少量指标文件
+```
+
+队友导入命令：
+
+```powershell
+git pull origin main
+
+powershell -ExecutionPolicy Bypass -File .\scripts\import_demo_artifact.ps1 `
+  -ZipPath D:\path\to\e3-vdt-ooc-demo-artifact.zip
+
+python -m pip install -r requirements.txt
+python -m pip install -e .
+
+powershell -ExecutionPolicy Bypass -File .\scripts\start_demo.ps1 -SkipChecks
+```
+
+---
+
+## 13. 项目创新点怎么说，不能过度包装
+
+### 13.1 不要这样说
+
+不要说：
+
+```text
+我们提出了一个全新 SOTA OOC 检测模型，超过了 VDT。
+```
+
+这不符合事实。我们没有证明主分类超过 VDT。
+
+也不要说：
+
+```text
+我们的归因模型已经可靠判断所有真实 OOC 错配原因。
+```
+
+真实 OOC 100 条 Type Acc 只有 0.29，不能这样说。
+
+### 13.2 应该这样说
+
+更准确的创新点是：
+
+1. **VDT 后置归因 sidecar**  
+   在保留 VDT 主分类结果的基础上，增加一个错配原因解释模块，不覆盖 VDT 的 OOC / Non-OOC 判断。
+
+2. **可控反事实归因训练**  
+   原数据集缺少错配类型标签，我们从 Non-OOC 样本做单字段最小编辑，自动构造 entity/location/time 的细粒度监督。
+
+3. **加入真实 OOC 分布修正**  
+   人工标注发现真实 OOC 多为 different-event mismatch，因此额外加入 filtered original OOC 作为 different-event 训练样本，并排除人工 gold set 防止泄漏。
+
+4. **no-true-context 推理路线**  
+   推理阶段只用 image + current_caption + VDT score，不依赖 VisualNews true context，因此可以用于数据集外样本演示。
+
+5. **证据不足保守输出**  
+   如果 VDT 不确定、CLIP 不可用或图片证据不足，系统输出 uncertain，不强行编造解释。
+
+6. **实验证明方向有效但仍有边界**  
+   plus2000 后真实 OOC 100 条 Type Acc 从 0.09 提升到 0.29，Field Micro-F1 从 0.328 提升到 0.478，说明训练分布修正有帮助，但仍需进一步提升。
+
+---
+
+## 14. 可能被老师追问的问题与回答
+
+### Q1：你们是不是只是在 VDT 后面加了标签？
+
+回答：
+
+> 不是简单手工加标签。原始 NewsCLIPpings 只有 OOC / Non-OOC 二分类标签，没有错配类型。我们通过可控反事实编辑，从原本匹配的 Non-OOC 样本中自动构造 entity/location/time 的细粒度错配监督；再结合 filtered original OOC 构造 different-event 类。这样 attribution head 可以在不使用 true context 的情况下学习 image-caption 字段冲突模式。
+
+### Q2：你们为什么能知道某条样本是 location mismatch？
+
+回答：
+
+> 对单字段反事实样本，我们知道，因为它是从原始匹配样本出发，只替换了一个地点 span，其余文本保持不变。所以这个合成样本的 gold mismatch type 就是 location mismatch。对于原始 OOC，我们不会武断标所有样本，而是只筛选低相似、低文本重合的 OOC 作为 different-event，并且用人工 100 条评估集检验泛化。
+
+### Q3：原始 OOC 为什么可以标成 different-event？
+
+回答：
+
+> 不是全部原始 OOC 都这样标。我们只筛选 `similarity_score <= 0.65` 且 caption 与 true context token Jaccard <= 0.08 的样本，这些样本更可能是整体事件错配。同时我们排除了人工 gold set 防止泄漏。实验上，加入这些样本后真实 OOC 100 条 Type Acc 从 0.09 提升到 0.29，说明这个训练分布修正是有效的，但我们也承认它还不完美。
+
+### Q4：推理时没有 true context，怎么知道错在哪里？
+
+回答：
+
+> 模型不是直接知道图片原始上下文，而是利用 image-caption 多模态特征：整体 CLIP 相似度、字段级 prompt grounding、字段存在性特征和 VDT score。比如 caption 中出现地点 Paris，但图像与 “a news photo taken in Paris” 的 grounding 弱，而实体/事件类 prompt 相对更匹配，模型可能输出 location mismatch。当然，如果图片本身不足以判断地点或时间，系统会输出 uncertain。
+
+### Q5：你们的真实 OOC 指标不高，怎么说明创新有效？
+
+回答：
+
+> 我们不把结果包装成已经完全解决。我们的贡献是建立了一个可运行、可评测的 VDT 后置归因框架，并证明训练分布修正有明显效果：plus2000 后真实 OOC Type Acc 从 0.09 到 0.29，Field Micro-F1 从 0.328 到 0.478。这个结果说明方向有效，同时也暴露了真实 OOC 归因比合成反事实更难，是后续工作的重点。
+
+### Q6：系统为什么有时候输出 Uncertain？
+
+回答：
+
+> 因为我们不希望系统在证据不足时强行归因。比如 CLIP/torch 没加载、图片无法读取、VDTAdapter 判断不确定，或者 caption 中没有可解释字段，系统就返回 uncertain / insufficient visual evidence。这是保守策略，不是 bug。
+
+### Q7：队友电脑为什么没有 VisualNews 也能跑？
+
+回答：
+
+> 只跑演示不需要原始数据集。训练和抽特征阶段需要 VisualNews/NewsCLIPpings；演示阶段只需要已经导出的 demo artifact，包括训练好的 attribution head、少量 features 和 demo 图片。因此队友用 artifact 就能跑网页，不需要 91GB 原图。
+
+---
+
+## 15. 队友分工建议
+
+### 15.1 复现负责人
+
+负责讲清楚：
+
+```text
+VDT strict baseline 离线复现结果
+两组 completed 指标
+bs128 OOM 的原因和 bs64 替代结果
+```
+
+关键文件：
+
+```text
+docs/REPRODUCTION_STATUS.md
+examples/reproduction_metrics.json
+```
+
+### 15.2 系统负责人
+
+负责讲清楚：
+
+```text
+网页怎么跑
+VDTAdapter 自动分类
+OOC gate 后进入 VDT-CF-Attr
+demo artifact 怎么导入
+```
+
+关键文件：
+
+```text
+demo/app.py
+scripts/start_demo.ps1
+scripts/export_demo_artifact.ps1
+scripts/import_demo_artifact.ps1
+docs/TEAMMATE_REPRODUCTION.md
+```
+
+### 15.3 方法负责人
+
+负责讲清楚：
+
+```text
+为什么不用 true context 做最终推理
+可控反事实如何构造标签
+为什么加入 original OOC different-event
+no-true-context 特征有哪些
+```
+
+关键文件：
+
+```text
+scripts/data/build_controlled_counterfactuals.py
+scripts/features/build_image_caption_attribution_features.py
+scripts/train/train_no_true_context_attribution_head.py
+scripts/infer/infer_vdt_cf_attr.py
+```
+
+### 15.4 报告负责人
+
+负责讲清楚：
+
+```text
+创新点边界
+实验表格
+真实 OOC 100 条结果
+不足与展望
+```
+
+关键文件：
+
+```text
+README.md
+docs/NO_TRUE_CONTEXT_SCALING_RESULTS.md
+outputs/report_tables_v2.md
+outputs/real_ooc_no_true_context_eval_metrics.json
+```
+
+---
+
+## 16. 最终答辩稿核心段落
+
+可以直接这样讲：
+
+> 我们的系统以 VDT 作为图文是否错配的主分类 baseline。VDT 能判断 OOC / Non-OOC，但不能解释具体错在哪里。因此我们在 VDT 后面设计了 VDT-CF-Attr 归因模块。最开始我们尝试用 VisualNews 的 true context 与当前 caption 比较，这可以作为 oracle，但推理阶段依赖原始上下文，数据集外图片无法保证可用。为此我们改成 no-true-context 路线：训练阶段利用匹配样本构造可控反事实，单独替换实体、地点或时间字段，得到细粒度错配标签；同时根据人工真实 OOC 分析，加入 filtered original OOC 作为 different-event 训练样本。推理阶段，系统只输入 image 和 current_caption，先由 VDTAdapter 自动给出 OOC / Non-OOC / Uncertain；只有 OOC 样本进入 attribution head，输出错配类型和冲突字段。实验上，plus2000 different-event 训练后，真实 OOC 100 条 Type Acc 从 0.09 提升到 0.29，Field Micro-F1 从 0.328 提升到 0.478，说明训练分布修正对真实 OOC 归因有帮助。但我们也诚实说明，真实 OOC 归因仍然困难，当前系统是一个可运行、可评测的归因原型，而不是已经完全解决所有错配解释问题。
+
+---
+
+## 17. 最终一句话总结
+
+```text
+VDT-CF-Attr 的核心不是用 true context 直接比文本差异，
+而是在训练阶段用可控反事实和筛选原始 OOC 构造错配类型监督，
+在推理阶段只依赖 image + current_caption + VDT score，
+在 VDT 判断 OOC 后输出可能的错配原因，并在证据不足时保守输出 uncertain。
+```
+
+---
+
+## 18. 最需要队友记住的三句话
+
+1. **VDT 负责是否 OOC，VDT-CF-Attr 只负责 OOC 后解释错在哪里。**
+2. **最终演示不输入 true context；true context 只用于训练构造、oracle 和评估参考。**
+3. **plus2000 different-event 提升了真实 OOC 归因效果，但我们不声称已经完全解决。**
