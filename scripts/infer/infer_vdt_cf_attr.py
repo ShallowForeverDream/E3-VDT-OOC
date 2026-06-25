@@ -218,7 +218,7 @@ def postprocess_prediction(
     if _is_non_ooc_label(vdt_label):
         final_fields: Set[str] = set()
         applied = original_type != "benign illustrative image" or bool(original_fields)
-        reason = "vdt_non_ooc_gate" if applied else "no_change"
+        reason = "vdt_non_ooc_or_benign_gate" if applied else "no_change"
         return "benign illustrative image", final_fields, applied, reason
 
     if mismatch_type == "benign illustrative image":
@@ -427,3 +427,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
