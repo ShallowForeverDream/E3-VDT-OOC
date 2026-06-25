@@ -20,6 +20,7 @@ MISMATCH_TYPES = [
     "temporal mismatch",
     "event-type mismatch",
     "relation mismatch",
+    "different-event mismatch",
     "context omission",
     "uncertain / evidence insufficient",
 ]
@@ -184,6 +185,7 @@ def build_workbook(candidate_rows: List[Dict[str, Any]], pred_rows: List[Dict[st
         ["Non-OOC：gold_mismatch_type 选 benign illustrative image，所有 gold_* 字段选 N。"],
         ["OOC 且证据不足：gold_mismatch_type 选 uncertain / evidence insufficient，gold_evidence_insufficient 选 Y。"],
         ["OOC 且能定位字段：选择对应 mismatch_type，并把相关 gold_* 字段选 Y。"],
+        ["OOC 且整件事都对不上：gold_mismatch_type 选 different-event mismatch，并把多个冲突字段选 Y。"],
         [""],
         ["标完后导回 JSONL："],
         ["python scripts\\eval\\import_attribution_xlsx.py --xlsx examples\\attribution_eval_candidates_annotate.xlsx --output examples\\attribution_eval_set.jsonl"],

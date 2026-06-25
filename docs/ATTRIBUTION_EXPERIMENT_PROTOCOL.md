@@ -21,6 +21,8 @@
 
 > 使用 VisualNews 原始上下文作为图像真实语境，比较 current caption 与 true image context 的事件字段差异，是否能比随机/多数类/text-only baseline 更准确地指出错配字段？
 
+注意：这里的 VisualNews `image_id -> true_image_context` 是数据集内的 oracle/context lookup，用于可控 benchmark 和人工归因评测；它不是任意互联网图片的完整部署方案。若处理数据集外图片，需要把该 lookup 模块替换为 provenance/retrieval 模块，例如反向图片搜索、新闻图像库检索、CLIP 相似图检索、OCR/EXIF/网页证据检索或 COVE-style context prediction。
+
 ## 2. COVE-lite 数据构造
 
 生成文件：
@@ -121,6 +123,22 @@ examples/attribution_eval_set.jsonl
 | evidence insufficient / uncertain | 20 |
 
 如果时间不够，先人工标 50 条，并在报告里说明限制。
+
+### 错配类型定义
+
+`mismatch_type` 是主错配类型；`gold_conflict_fields` 是多标签字段冲突。不要强行把所有 OOC 都解释成单一人物/时间/地点错误。
+
+| mismatch_type | 什么时候使用 |
+|---|---|
+| benign illustrative image | Non-OOC，或当前 caption 与 true context 描述同一事件/同一语境 |
+| entity mismatch | 主要是人物、组织、主体不同 |
+| location mismatch | 主要是地点不同 |
+| temporal mismatch | 主要是年份、日期、时期不同 |
+| event-type mismatch | 事件类别不同，例如医疗 vs 体育 |
+| relation mismatch | 主体/场景相近但动作关系不同，例如 meet vs attack |
+| different-event mismatch | 整件事都对不上，通常多个字段同时冲突，例如主体、地点、事件类型都不同 |
+| context omission | 当前 caption 有关键断言，但 true context 没有足够信息支持或反驳 |
+| uncertain / evidence insufficient | true context 过短、缺字段或证据明显不足，不能可靠归因 |
 
 ## 5. Baseline 对比
 

@@ -3,8 +3,9 @@ from typing import Any, Dict, List, Optional
 
 MISMATCH_TYPES = [
     "entity mismatch", "location mismatch", "temporal mismatch",
-    "event-type mismatch", "relation mismatch", "context omission",
-    "benign illustrative image", "uncertain / evidence insufficient",
+    "event-type mismatch", "relation mismatch", "different-event mismatch",
+    "context omission", "benign illustrative image",
+    "uncertain / evidence insufficient",
 ]
 
 @dataclass
