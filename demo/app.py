@@ -104,11 +104,13 @@ def _field_rows(obj: Dict[str, Any]) -> str:
             sim = f"{float(sim_val):.4f}"
         except Exception:
             sim = "-"
+        status_html = "<span class='pill pill-conflict'>冲突</span>" if conflict else "<span class='pill'>未触发</span>"
+        present_html = "<span class='pill pill-present'>存在</span>" if present else "<span class='pill'>未检测</span>"
         rows.append(
             "<tr>"
             f"<td>{_esc(zh)}</td>"
-            f"<td>{'<span class=\"pill pill-conflict\">冲突</span>' if conflict else '<span class=\"pill\">未触发</span>'}</td>"
-            f"<td>{'<span class=\"pill pill-present\">存在</span>' if present else '<span class=\"pill\">未检测</span>'}</td>"
+            f"<td>{status_html}</td>"
+            f"<td>{present_html}</td>"
             f"<td>{_esc(sim)}</td>"
             "</tr>"
         )
