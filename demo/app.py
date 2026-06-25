@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import html
 import json
 import os
 import socket
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 try:
     import gradio as gr
@@ -19,85 +20,42 @@ if str(ROOT) not in sys.path:
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from e3vdt.inference.pipeline import E3VDTPipeline
-from e3vdt.inference.cove_attr_pipeline import VDTCOVEAttrPipeline
-from e3vdt.inference.vdt_adapter import VDTAdapter
-
 try:
     from scripts.infer.infer_vdt_cf_attr import predict as predict_vdt_cf_attr
-except Exception:
+except Exception:  # pragma: no cover
     predict_vdt_cf_attr = None
 
-legacy_pipe = E3VDTPipeline()
-cove_pipe = VDTCOVEAttrPipeline()
-vdt_adapter = VDTAdapter(project_root=ROOT)
+
+FIELD_ZH = {
+    "entity": "主体 / 人物",
+    "location": "地点",
+    "time": "时间",
+    "event_type": "事件类型",
+    "relation": "关系 / 动作",
+    "evidence_insufficient": "证据不足",
+    "context_omission": "上下文遗漏",
+}
+
+TYPE_ZH = {
+    "benign illustrative image": "未发现明确错配",
+    "none": "未发现明确错配",
+    "entity mismatch": "主体 / 人物错配",
+    "location mismatch": "地点错配",
+    "temporal mismatch": "时间错配",
+    "event-type mismatch": "事件类型错配",
+    "relation mismatch": "关系 / 动作错配",
+    "different-event mismatch": "完全不同事件",
+    "uncertain / insufficient visual evidence": "视觉证据不足 / 不确定",
+    "uncertain / evidence insufficient": "证据不足 / 不确定",
+}
 
 
-def read_jsonl(path: Path) -> List[Dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            rows.append(json.loads(line))
-    return rows
-
-
-def read_json_first(paths: List[Path]) -> Dict[str, Any]:
-    for path in paths:
-        if path.exists():
-            return json.loads(path.read_text(encoding="utf-8"))
-    return {}
-
-
-def _load_legacy_examples():
-    rows = []
-    for item in read_jsonl(ROOT / "examples" / "demo_cases.jsonl"):
-        image = None
-        if item.get("demo_image"):
-            image_path = ROOT / item["demo_image"]
-            image = str(image_path) if image_path.exists() else None
-        rows.append([image, item["text"], item.get("image_context", "")])
-    return rows or [[None, "A flood caused evacuations in Shanghai in 2024.", "A flood caused evacuations in Shanghai in 2024."]]
-
-
-LEGACY_EXAMPLES = _load_legacy_examples()
-COVE_CASES = read_jsonl(ROOT / "examples" / "cove_attr_demo_cases.jsonl")
-CASE_BY_KEY = {f"{r['sample_id']} | {r.get('title','')}": r for r in COVE_CASES}
-CASE_KEYS = list(CASE_BY_KEY) or ["manual"]
-
-
-def _load_no_true_context_examples():
-    rows = []
-    local_cases = read_jsonl(ROOT / "outputs" / "no_true_context_attr_demo_cases.jsonl")
-    if local_cases:
-        for item in local_cases:
-            p = Path(str(item.get("image", "")))
-            if not p.is_absolute():
-                p = ROOT / p
-            rows.append([
-                str(p) if p.exists() else None,
-                item.get("caption", ""),
-            ])
-    if rows:
-        return rows
-    # Fallback examples are only for UI smoke testing.  The no-true-context
-    # model may not match these placeholder images; use the exported local
-    # VisualNews cases above for a stronger live demo.
-    return [
-        [str(ROOT / "examples/demo_images/london_climate_demonstration_monday.png"), "A large protest erupted in Paris on Monday after a new climate policy."],
-        [str(ROOT / "examples/demo_images/elon_musk_beijing_2024.png"), "Barack Obama will meet officials in Beijing in 2024."],
-        [str(ROOT / "examples/demo_images/flood_shanghai_2024.png"), "A flood caused evacuations in Shanghai in 2024."],
-    ]
-
-
-NO_TRUE_CONTEXT_EXAMPLES = _load_no_true_context_examples()
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _default_no_true_context_model() -> str:
     candidates = [
-        # 最新演示默认：单字段各约 1000 + 原始 OOC different-event 总计 3000 条（约额外 2000 条），
-        # 并排除了 100 条人工真实 OOC gold set，避免训练/评测重合。
         ROOT / "outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl",
         ROOT / "outputs/no_true_context_attr_5way_1000/no_true_context_attr_head.pkl",
         ROOT / "outputs/no_true_context_attr/no_true_context_attr_head.pkl",
@@ -108,422 +66,277 @@ def _default_no_true_context_model() -> str:
     return str(candidates[-1])
 
 
-def _load_reproduction_metrics():
-    path = ROOT / "examples" / "reproduction_metrics.json"
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
-
-
-def _fmt(v: Any) -> str:
-    if v is None:
+def _pct(x: Any) -> str:
+    try:
+        return f"{float(x) * 100:.1f}%"
+    except Exception:
         return "-"
-    if isinstance(v, float):
-        return f"{v:.4f}"
-    return str(v)
 
 
-def _env_flag(name: str) -> bool:
-    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+def _esc(x: Any) -> str:
+    return html.escape(str(x if x is not None else ""))
 
 
-def render_reproduction_metrics() -> str:
-    rows = _load_reproduction_metrics()
+def _status_badge(label: str) -> str:
+    low = str(label or "").lower()
+    if "non" in low or "benign" in low:
+        return "<span class='badge badge-ok'>Non-OOC</span>"
+    if "uncertain" in low or "unknown" in low:
+        return "<span class='badge badge-warn'>Uncertain</span>"
+    return "<span class='badge badge-ooc'>OOC</span>"
+
+
+def _field_rows(obj: Dict[str, Any]) -> str:
+    fs = obj.get("feature_summary") or {}
+    prompt_sims = fs.get("prompt_sims") or {}
+    presence = fs.get("field_presence") or {}
+    conflict_fields = set(obj.get("conflict_fields") or [])
+    rows: List[str] = []
+    ordered = ["entity", "location", "time", "event_type", "relation", "evidence_insufficient", "context_omission"]
+    for field in ordered:
+        if field not in prompt_sims and field not in conflict_fields and field not in presence:
+            continue
+        zh = FIELD_ZH.get(field, field)
+        present = int(presence.get(field, 1 if field in {"evidence_insufficient", "context_omission"} else 0) or 0)
+        conflict = field in conflict_fields
+        sim_val = prompt_sims.get(field, "")
+        try:
+            sim = f"{float(sim_val):.4f}"
+        except Exception:
+            sim = "-"
+        rows.append(
+            "<tr>"
+            f"<td>{_esc(zh)}</td>"
+            f"<td>{'<span class=\"pill pill-conflict\">冲突</span>' if conflict else '<span class=\"pill\">未触发</span>'}</td>"
+            f"<td>{'<span class=\"pill pill-present\">存在</span>' if present else '<span class=\"pill\">未检测</span>'}</td>"
+            f"<td>{_esc(sim)}</td>"
+            "</tr>"
+        )
     if not rows:
-        return "## VDT 复现实验\n\n暂无 `examples/reproduction_metrics.json`。"
-    lines = [
-        "## VDT strict BLIP-2/GaussianBlur 复现实验",
-        "",
-        "| 实验 | 状态 | target_domain | F1 | Acc | AUC | 说明 |",
-        "|---|---|---|---:|---:|---:|---|",
-    ]
-    for r in rows:
-        m = r.get("metrics") or {}
-        lines.append(f"| `{r.get('id','-')}` | {r.get('status','-')} | `{r.get('target_domain_arg','-')}` | {_fmt(m.get('f1'))} | {_fmt(m.get('acc'))} | {_fmt(m.get('auc'))} | {r.get('note','').replace('|','/')} |")
-    lines += [
-        "",
-        "**答辩口径**：VDT 是主分类 baseline；COVE-Attr 是旁路归因模块，不覆盖 VDT 的 OOC / Non-OOC 标签。",
-    ]
-    return "\n".join(lines)
+        rows.append("<tr><td colspan='4' class='muted'>暂无字段级结果</td></tr>")
+    return "\n".join(rows)
 
 
-def load_cove_case(key: str):
-    row = CASE_BY_KEY.get(key) or (COVE_CASES[0] if COVE_CASES else {})
-    return (
-        row.get("current_caption", ""),
-        row.get("true_image_context", ""),
-        row.get("sample_id", "manual"),
-        row.get("image_id", "manual-image"),
-        row.get("domain", "demo"),
-        row.get("demo_point", ""),
-    )
+def _result_card(obj: Dict[str, Any]) -> str:
+    mismatch = str(obj.get("mismatch_type") or "uncertain / insufficient visual evidence")
+    mismatch_zh = TYPE_ZH.get(mismatch, mismatch)
+    vdt_label = str(obj.get("vdt_label") or "Uncertain")
+    vdt_score = obj.get("vdt_score", 0.0)
+    confidence = obj.get("confidence", 0.0)
+    evidence_status = obj.get("evidence_status", "uncertain")
+    decision_source = obj.get("decision_source", "-")
+    postprocess = obj.get("postprocess_applied", False)
+    post_reason = obj.get("postprocess_reason", "no_change")
+    explanation = obj.get("explanation", "")
+    field_table = _field_rows(obj)
+    raw_json = _esc(json.dumps(obj, ensure_ascii=False, indent=2))
 
-
-def _field_table(obj: Dict[str, Any]) -> List[List[Any]]:
-    rows = []
-    for field, item in obj.get("field_nli", {}).items():
-        rows.append([
-            field,
-            item.get("label"),
-            ", ".join(item.get("current_values") or []),
-            ", ".join(item.get("true_values") or []),
-            item.get("confidence"),
-            item.get("rationale"),
-        ])
-    return rows
-
-
-def _event_table(obj: Dict[str, Any]) -> List[List[Any]]:
-    cur, tru = obj.get("current_event", {}), obj.get("true_event", {})
-    pairs = [
-        ("entity", "entities"),
-        ("location", "locations"),
-        ("time", "times"),
-        ("event_type", "event_types"),
-        ("relation", "relations"),
-    ]
-    return [[name, ", ".join(cur.get(k) or []), ", ".join(tru.get(k) or [])] for name, k in pairs]
-
-
-def run_cove_attr(case_key: str, current_caption: str, true_context: str, sample_id: str, image_id: str, domain: str):
-    auto_vdt = vdt_adapter.predict(caption=current_caption or "", image_context=true_context or "")
-    obj = cove_pipe.predict(
-        current_caption=current_caption,
-        true_image_context=true_context,
-        vdt_label=auto_vdt.label,
-        vdt_score=float(auto_vdt.score),
-        sample_id=sample_id or "manual",
-        image_id=image_id or "manual-image",
-        domain=domain or "demo",
-    )
-    obj["auto_vdt"] = auto_vdt.to_dict()
-    conflicts = ", ".join(obj["conflict_fields"]) if obj["conflict_fields"] else "无明确冲突"
-    ev = obj["evidence_relevance"]
-    summary = f"""
-### VDT-COVE-Attr 输出
-
-- **最终主分类**：{obj['final_label']}  
-- **主分类来源**：`{obj['decision_source']}`，{obj['classification_note']}  
-- **自动 VDT baseline**：{obj['vdt']['label']} / score={obj['vdt']['score']}
-- **VDT adapter 来源**：`{obj['auto_vdt']['decision_source']}`
-- **错配类型**：**{obj['mismatch_type']}**  
-- **冲突字段**：`{conflicts}`  
-- **证据相关性**：{ev['level']} / score={ev['score']} / sufficient={ev['sufficient']}  
-
-{obj['explanation']}
-
-> 边界说明：这是系统演示闭环；大规模归因有效性要看人工 gold set + ablation 实验。
-""".strip()
-    evidence_summary = {
-        "relevance_score": ev["score"],
-        "level": ev["level"],
-        "sufficient": ev["sufficient"],
-        "token_overlap": ev["token_overlap"],
-        "event_overlap": ev["event_overlap"],
-    }
-    return summary, evidence_summary, _event_table(obj), _field_table(obj), json.dumps(obj, ensure_ascii=False, indent=2)
-
-
-def run_no_true_context_attr(image, caption: str):
-    if predict_vdt_cf_attr is None:
-        return (
-            "### VDT-CF-Attr 未加载\n\n`predict_vdt_cf_attr` 导入失败，请检查 `scripts/infer/infer_vdt_cf_attr.py` 和依赖。",
-            {},
-            [],
-            "{}",
-        )
-    image_path = image if isinstance(image, str) else ""
-    if not image_path:
-        return (
-            "### 请先上传图片\n\n新版 VDT-CF-Attr 推理阶段不使用 true context，因此必须提供 image + current_caption。",
-            {},
-            [],
-            "{}",
-        )
-    auto_vdt = vdt_adapter.predict(image_path=image_path, caption=caption or "")
-    obj = predict_vdt_cf_attr(
-        image_path=image_path,
-        caption=caption or "",
-        vdt_label=auto_vdt.label,
-        vdt_score=float(auto_vdt.score),
-        model_path=_default_no_true_context_model(),
-        device=os.environ.get("VDT_CF_ATTR_DEVICE", "cuda"),
-        no_clip=_env_flag("VDT_CF_ATTR_NO_CLIP"),
-    )
-    obj["auto_vdt"] = auto_vdt.to_dict()
-    conflicts = ", ".join(obj.get("conflict_fields") or []) or "无明确冲突"
-    summary = f"""
-### VDT-CF-Attr 输出（不输入 true context）
-
-- **自动 VDT 主分类**：{obj['vdt_label']} / score={obj['vdt_score']}
-- **VDT adapter 来源**：`{obj['auto_vdt']['decision_source']}`
-- **错配类型**：**{obj['mismatch_type']}**
-- **冲突字段**：`{conflicts}`
-- **置信度**：{obj['confidence']}
-- **视觉证据状态**：{obj['evidence_status']}
-- **是否使用 true context**：`{obj['uses_true_context']}`
-- **决策来源**：`{obj['decision_source']}`
-- **字段存在性后处理**：`{obj.get('postprocess_applied', False)}` / `{obj.get('postprocess_reason', 'no_change')}`
-
-{obj['explanation']}
-
-> 答辩口径：这是最终应用路线的演示入口。它只输入图片和当前 caption；VDT label/score 由系统自动产生，true context 只用于训练构造和评测参考，不进入推理。
-""".strip()
-    fs = obj.get("feature_summary", {})
-    sim_rows = []
-    for field, val in (fs.get("prompt_sims") or {}).items():
-        sim_rows.append([field, val, (fs.get("field_presence") or {}).get(field, 0)])
-    label = {
-        "mismatch_type": obj.get("mismatch_type"),
-        "confidence": obj.get("confidence"),
-        "uses_true_context": obj.get("uses_true_context"),
-        "postprocess_applied": obj.get("postprocess_applied"),
-        "postprocess_reason": obj.get("postprocess_reason"),
-        "clip_caption_sim": fs.get("clip_caption_sim"),
-    }
-    return summary, label, sim_rows, json.dumps(obj, ensure_ascii=False, indent=2)
-
-
-def run_legacy_demo(image, text, image_context):
-    image_path = image if isinstance(image, str) else None
-    obj = legacy_pipe.predict(text=text, image_path=image_path, image_context=image_context).to_dict()
-    fields = ", ".join(obj["conflict_fields"]) if obj["conflict_fields"] else "无明确冲突 / 证据不足"
-    summary = f"### 判断：{obj['label']}\n\n- 置信度：**{obj['confidence']:.2f}**\n- 错配类型：**{obj['mismatch_type']}**\n- 冲突字段：`{fields}`\n- 决策来源：`{obj.get('decision_source','-')}`\n\n{obj['explanation']}"
-    return summary, obj["event_scores"], json.dumps(obj, ensure_ascii=False, indent=2)
-
-
-def run_guardrail_demo(text, image_context, baseline_label, baseline_score):
-    obj = legacy_pipe.predict(
-        text=text,
-        image_context=image_context,
-        baseline_label=baseline_label,
-        baseline_score=float(baseline_score),
-        classification_policy="baseline_preserving",
-    ).to_dict()
-    preserved = "✅ 已保持 VDT baseline 主分类" if obj["label"] == baseline_label else "❌ 主分类被覆盖，需要检查"
-    fields = ", ".join(obj["conflict_fields"]) if obj["conflict_fields"] else "无明确冲突 / 证据不足"
-    summary = (
-        f"### Accuracy-preserving 验证：{preserved}\n\n"
-        f"- VDT baseline label：**{baseline_label}**\n"
-        f"- 最终输出 label：**{obj['label']}**\n"
-        f"- 错配类型：**{obj['mismatch_type']}**\n"
-        f"- 冲突字段：`{fields}`\n"
-        f"- 决策来源：`{obj.get('decision_source','-')}`\n\n"
-        "解释模块可以指出冲突字段，但正式策略下不覆盖 VDT 主分类。"
-    )
-    return summary, obj["event_scores"], json.dumps(obj, ensure_ascii=False, indent=2)
-
-
-def render_system_dashboard() -> str:
-    metric_path = ROOT / "examples" / "cove_attr_demo_outputs.json"
-    metric = None
-    if metric_path.exists():
-        metric = json.loads(metric_path.read_text(encoding="utf-8")).get("summary", {})
-    pilot = ""
-    if metric:
-        pilot = f"""
-### 系统演示集自检（curated smoke set）
-
-| 指标 | 数值 |
-|---|---:|
-| 样例数 | {metric.get('n', 0)} |
-| mismatch type acc | {metric.get('mismatch_type_accuracy', 0):.4f} |
-| conflict-field micro-F1 | {metric.get('conflict_field_micro_f1', 0):.4f} |
-| exact match | {metric.get('exact_match_rate', 0):.4f} |
-
-> 这只是演示集一致性检查，不替代最终人工 gold attribution 实验。
-"""
     return f"""
-# VDT-COVE-Attr 可验收系统演示
+    <section class="result-card">
+      <div class="card-topline">
+        <div>
+          <p class="eyebrow">VDT-CF-Attr · No true context inference</p>
+          <h2>图文错配检测结果</h2>
+        </div>
+        {_status_badge(vdt_label)}
+      </div>
 
-**技术路线**：VDT baseline → controlled counterfactual attribution training → no-true-context image+caption attribution head；COVE-lite true context 仅作为 oracle/构造/评测辅助。
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <span class="metric-label">OOC 判定</span>
+          <strong>{_esc(vdt_label)}</strong>
+        </div>
+        <div class="metric-box">
+          <span class="metric-label">OOC 总可信度</span>
+          <strong>{_pct(vdt_score)}</strong>
+        </div>
+        <div class="metric-box accent">
+          <span class="metric-label">错配类型</span>
+          <strong>{_esc(mismatch_zh)}</strong>
+          <small>{_esc(mismatch)}</small>
+        </div>
+        <div class="metric-box">
+          <span class="metric-label">错配类型分数</span>
+          <strong>{_pct(confidence)}</strong>
+        </div>
+      </div>
 
-| 模块 | 系统状态 | 答辩口径 |
-|---|---|---|
-| VDT 主分类 | 已完成两组核心复现 | 提供 OOC / Non-OOC baseline，不声称完整复现全部论文设置 |
-| COVE-lite true context | demo 已接入 | 使用 VisualNews 原始 caption/article metadata 作为图片真实语境 |
-| Evidence relevance | demo 已接入 | 证据不足时输出 evidence insufficient，避免强行解释 |
-| Field-wise NLI attribution | demo 已接入 | 输出 entity/location/time/event_type/relation 字段矛盾 |
-| 自动 VDT adapter | demo 已接入 | 自动输出 OOC / Non-OOC / Uncertain，不再由前端手填 |
-| VDT-CF-Attr no-true-context | demo 已接入 | 推理只用 image + caption；系统自动调用 VDT adapter 后再做归因，不输入 true context |
-| plus2000 different-event 训练 | 已完成本地实验 | 额外加入原始 OOC different-event 样本，真实 OOC 100 条评估有提升，但仍需诚实说明泛化未完全解决 |
+      <div class="table-wrap">
+        <div class="section-title">冲突字段表</div>
+        <table class="field-table">
+          <thead>
+            <tr><th>字段</th><th>状态</th><th>Caption 中是否存在</th><th>视觉 Prompt 相似度</th></tr>
+          </thead>
+          <tbody>{field_table}</tbody>
+        </table>
+      </div>
 
-{pilot}
+      <div class="explain-box">
+        <div class="section-title">系统说明</div>
+        <p>{_esc(explanation)}</p>
+        <div class="meta-line">
+          <span>uses_true_context=false</span>
+          <span>source={_esc(decision_source)}</span>
+          <span>evidence={_esc(evidence_status)}</span>
+          <span>postprocess={_esc(postprocess)} / {_esc(post_reason)}</span>
+        </div>
+      </div>
 
-**明天演示顺序**：先讲本页路线 → 打开“VDT-CF-Attr 无 true context”跑本地反事实样例 → 打开“VDT-COVE-Attr oracle”说明上限/评测辅助 → 打开“分类不降验证”证明 sidecar 不覆盖 VDT → 打开“复现实验指标”。
-""".strip()
+      <details class="raw-json"><summary>查看原始 JSON 输出</summary><pre>{raw_json}</pre></details>
+    </section>
+    """
 
 
-def render_experiment_board() -> str:
-    lines = [
-        "# 实验看板：哪些完成，哪些待补",
-        "",
-        "| 实验 | 当前状态 | 交付/文件 | 答辩说法 |",
-        "|---|---|---|---|",
-        "| VDT strict baseline | ✅ 已完成两组核心复现 | `examples/reproduction_metrics.json` | 可汇报分类 baseline 指标 |",
-        "| 系统演示集 smoke test | ✅ 已完成 | `examples/cove_attr_demo_outputs.json` | 证明系统闭环和 UI 样例一致 |",
-        "| COVE-lite context coverage | ⚠️ 脚本已准备，路径待队友复核 | `scripts/context/build_cove_lite_context_pairs.py` | 答辩后补全 VisualNews metadata 路径后跑 |",
-        "| 真实 OOC 人工 gold set | ✅ 已导入 100 条 | `examples/real_ooc_attribution_eval_set.jsonl` | 可用于真实 OOC 归因评估；仍需补 10–15 条自然语言理由做展示 |",
-        "| Attribution ablation | ✅ 已跑真实 OOC oracle 辅助评估 | `examples/real_ooc_manual_eval_metrics.json` | 当前结果说明 different-event 泛化仍弱，是后续优化依据 |",
-        "| No-true-context plus2000 | ✅ 已跑增强训练 | `outputs/no_true_context_attr_5way_plus2000/` | 真实 OOC Type Acc 从 0.09 提升到 0.29，但仍需诚实说明未完全解决 |",
-        "| NLI/LLM extractor | 规划中 | `vdt_cove_attr_package/` | 作为答辩后增强，不冒充已完成 |",
-        "",
-        "## 已有本地输出提醒",
-    ]
-    report = ROOT / "outputs" / "report_tables.md"
-    if report.exists():
-        txt = report.read_text(encoding="utf-8")
-        if "coverage | 0.0" in txt or "| kept | 0 |" in txt:
-            lines.append("- 当前 `outputs/report_tables.md` 显示 context coverage 为 0，说明 VisualNews metadata 路径没有对上；不能作为最终实验结果。")
-        else:
-            lines.append("- `outputs/report_tables.md` 已存在，可用于后续报告表格。")
-    else:
-        lines.append("- 尚未生成大规模实验 report_tables。")
-    stats = read_json_first([
-        ROOT / "outputs" / "real_ooc_manual_label_stats.json",
-        ROOT / "examples" / "real_ooc_manual_100_summary.json",
-    ])
-    metrics = read_json_first([
-        ROOT / "outputs" / "real_ooc_attribution_eval_metrics.json",
-        ROOT / "examples" / "real_ooc_manual_eval_metrics.json",
-    ])
-    if stats:
-        lines += [
-            "",
-            "## 真实 OOC 人工标注 100 条",
-            "",
-            f"- Gold set size：**{stats.get('records', 0)}**，completed：**{stats.get('completed', 0)}**。",
-            f"- 主导错配类型：**{stats.get('dominant_type', '-')}**，占比 **{float(stats.get('dominant_type_ratio', 0.0)):.0%}**。",
-            f"- 类型分布：`{stats.get('type_distribution', {})}`",
-            f"- 字段分布：`{stats.get('field_distribution', {})}`",
-            f"- 域分布：`{stats.get('domain_distribution', {})}`",
-        ]
-        warn = stats.get("rationale_warning_counts", {})
-        if warn.get("missing_rationale") or warn.get("numeric_rationale"):
-            lines.append(f"- 标注理由提醒：`{warn}`；这些样本可用于指标计算，但答辩案例还需要补 10–15 条自然语言理由。")
-    if metrics and metrics.get("methods"):
-        lines += [
-            "",
-            "## 真实 OOC 100 条评估结果（true-context/oracle 辅助设置）",
-            "",
-            "| Method | Matched | Type Acc | Field Micro-F1 | Exact Match |",
-            "|---|---:|---:|---:|---:|",
-        ]
-        for name, res in metrics.get("methods", {}).items():
-            lines.append(f"| {name} | {res.get('matched', 0)} | {float(res.get('mismatch_type_accuracy', 0.0)):.4f} | {float(res.get('conflict_field_micro_f1', 0.0)):.4f} | {float(res.get('exact_match_rate', 0.0)):.4f} |")
-        lines.append("")
-        lines.append("> 注意：这张表使用人工 gold set 评估 true-context/oracle 辅助归因方法；no-true-context image+caption head 需要单独构造图像特征后再评估，不能混写。")
-    ntc_real = read_json_first([ROOT / "outputs" / "real_ooc_no_true_context_eval_metrics.json"])
-    if ntc_real and ntc_real.get("models"):
-        lines += [
-            "",
-            "## 真实 OOC 100 条评估结果（no-true-context image+caption head）",
-            "",
-            "| Model | Type Acc | Field Micro-F1 | Exact Match |",
-            "|---|---:|---:|---:|",
-        ]
-        for name, res in ntc_real.get("models", {}).items():
-            lines.append(f"| {name} | {float(res.get('mismatch_type_accuracy', 0.0)):.4f} | {float(res.get('conflict_field_micro_f1', 0.0)):.4f} | {float(res.get('exact_match_rate', 0.0)):.4f} |")
-        lines.append("")
-        lines.append("> plus2000 版本真实 OOC 指标明显高于旧五类模型，但还不能说已经可靠解决 different-event 泛化。")
-    return "\n".join(lines)
+def _empty_card(message: str) -> str:
+    return f"""
+    <section class="result-card placeholder-card">
+      <p class="eyebrow">Ready</p>
+      <h2>等待输入</h2>
+      <p>{_esc(message)}</p>
+    </section>
+    """
+
+
+def run_inference(image_path: str | None, caption: str) -> str:
+    if predict_vdt_cf_attr is None:
+        return _empty_card("后端 infer_vdt_cf_attr.py 导入失败，请检查依赖和仓库路径。")
+    if not image_path:
+        return _empty_card("请上传一张新闻图片。")
+    if not str(caption or "").strip():
+        return _empty_card("请输入与图片配对的新闻文本。")
+    try:
+        obj = predict_vdt_cf_attr(
+            image_path=str(image_path),
+            caption=str(caption),
+            vdt_label="auto",
+            model_path=_default_no_true_context_model(),
+            device=os.environ.get("VDT_CF_ATTR_DEVICE", "cuda"),
+            no_clip=_env_flag("VDT_CF_ATTR_NO_CLIP"),
+        )
+        return _result_card(obj)
+    except Exception as exc:  # pragma: no cover
+        return _empty_card(f"推理失败：{exc}")
+
+
+CUSTOM_CSS = """
+:root {
+  --bg0: #070b16;
+  --bg1: #0b1020;
+  --card: rgba(255, 255, 255, 0.08);
+  --card-strong: rgba(255, 255, 255, 0.13);
+  --line: rgba(255, 255, 255, 0.14);
+  --text: #edf3ff;
+  --muted: #94a3b8;
+  --brand: #7dd3fc;
+  --brand2: #a78bfa;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --danger: #fb7185;
+}
+.gradio-container {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(125, 211, 252, .20), transparent 32%),
+    radial-gradient(circle at 85% 20%, rgba(167, 139, 250, .18), transparent 30%),
+    linear-gradient(135deg, var(--bg0), var(--bg1)) !important;
+  color: var(--text) !important;
+  min-height: 100vh;
+}
+#main-shell { max-width: 1180px; margin: 0 auto; padding: 52px 28px 64px; }
+.hero { margin-bottom: 28px; }
+.hero .kicker { color: var(--brand); letter-spacing: .12em; text-transform: uppercase; font-size: 12px; font-weight: 700; }
+.hero h1 { font-size: clamp(34px, 5vw, 64px); line-height: 1.04; margin: 8px 0 14px; color: var(--text); }
+.hero p { max-width: 760px; color: var(--muted); font-size: 16px; line-height: 1.7; }
+.input-panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  padding: 24px;
+  backdrop-filter: blur(22px);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .30);
+}
+.input-panel label, .input-panel .label-wrap span { color: var(--text) !important; }
+.input-panel textarea, .input-panel input { background: rgba(15, 23, 42, .64) !important; color: var(--text) !important; border-color: var(--line) !important; }
+#run-btn { border-radius: 999px !important; min-height: 48px; font-weight: 800; background: linear-gradient(135deg, var(--brand), var(--brand2)) !important; color: #05111f !important; border: 0 !important; }
+.result-card {
+  margin-top: 24px;
+  background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.075));
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  padding: 28px;
+  color: var(--text);
+  box-shadow: 0 30px 90px rgba(0,0,0,.34);
+  backdrop-filter: blur(26px);
+}
+.card-topline { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 22px; }
+.eyebrow { color: var(--brand); letter-spacing: .10em; font-size: 11px; text-transform: uppercase; font-weight: 800; margin: 0 0 8px; }
+.result-card h2 { margin: 0; font-size: 26px; color: var(--text); }
+.badge { border-radius: 999px; padding: 9px 14px; font-weight: 900; font-size: 13px; border: 1px solid var(--line); }
+.badge-ooc { background: rgba(251, 113, 133, .18); color: #fecdd3; }
+.badge-ok { background: rgba(52, 211, 153, .16); color: #bbf7d0; }
+.badge-warn { background: rgba(251, 191, 36, .16); color: #fde68a; }
+.metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 18px 0 24px; }
+.metric-box { background: rgba(15, 23, 42, .58); border: 1px solid var(--line); border-radius: 22px; padding: 18px; min-height: 108px; }
+.metric-box.accent { background: linear-gradient(135deg, rgba(125, 211, 252, .18), rgba(167, 139, 250, .18)); }
+.metric-label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+.metric-box strong { display: block; font-size: 23px; line-height: 1.2; color: var(--text); }
+.metric-box small { display: block; color: var(--muted); margin-top: 6px; }
+.section-title { font-weight: 900; margin: 0 0 12px; color: var(--text); }
+.table-wrap, .explain-box { margin-top: 18px; }
+.field-table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 18px; background: rgba(15, 23, 42, .48); }
+.field-table th, .field-table td { padding: 13px 14px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.10); color: var(--text); }
+.field-table th { color: #cbd5e1; font-size: 13px; font-weight: 800; background: rgba(255,255,255,.055); }
+.field-table tr:last-child td { border-bottom: 0; }
+.pill { display: inline-flex; border-radius: 999px; padding: 5px 10px; background: rgba(148, 163, 184, .16); color: #cbd5e1; font-size: 12px; font-weight: 800; }
+.pill-conflict { background: rgba(251, 113, 133, .18); color: #fecdd3; }
+.pill-present { background: rgba(125, 211, 252, .16); color: #bae6fd; }
+.explain-box { background: rgba(15, 23, 42, .42); border: 1px solid var(--line); border-radius: 22px; padding: 18px; }
+.explain-box p { color: #dbeafe; line-height: 1.7; margin: 0 0 12px; }
+.meta-line { display: flex; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 12px; }
+.meta-line span { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; }
+.raw-json { margin-top: 18px; color: var(--muted); }
+.raw-json summary { cursor: pointer; color: #cbd5e1; font-weight: 800; }
+.raw-json pre { white-space: pre-wrap; background: rgba(2, 6, 23, .72); color: #dbeafe; padding: 16px; border-radius: 18px; border: 1px solid var(--line); max-height: 360px; overflow: auto; }
+.placeholder-card { min-height: 210px; display: flex; flex-direction: column; justify-content: center; }
+.placeholder-card p:last-child { color: var(--muted); font-size: 16px; }
+.muted { color: var(--muted) !important; }
+footer { color: var(--muted); text-align: center; margin-top: 24px; font-size: 12px; }
+@media (max-width: 860px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } .card-topline { flex-direction: column; } }
+@media (max-width: 560px) { .metrics-grid { grid-template-columns: 1fr; } #main-shell { padding: 32px 14px 46px; } }
+"""
 
 
 def build_app():
-    with gr.Blocks(title="VDT-COVE-Attr OOC System") as app:
-        gr.Markdown(render_system_dashboard())
-        with gr.Tabs():
-            with gr.Tab("VDT-CF-Attr 无 true context"):
-                gr.Markdown("## 最终应用路线：只输入 image + current caption\n该页不提供 `true_image_context`，也不要求手填 `VDT label / score`。系统会先自动调用 `VDTAdapter` 得到 OOC/Non-OOC，再进入 no-true-context attribution head。若本地存在 `outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl`，会优先加载最新 attribution head；否则依次回退到旧五类模型、基础 no-true 模型、field-prompt grounding rule。首次运行需要加载 CLIP/transformers 权重，等待几十秒是正常现象；后续同一进程会复用缓存。")
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        ntc_image = gr.Image(label="新闻图片 / Image", type="filepath")
-                        ntc_caption = gr.Textbox(label="Current caption / 当前新闻文本", lines=4)
-                        ntc_btn = gr.Button("运行 VDT-CF-Attr", variant="primary")
-                    with gr.Column(scale=1):
-                        ntc_summary = gr.Markdown()
-                        ntc_label = gr.JSON(label="No-true-context attribution summary")
-                        ntc_sims = gr.Dataframe(headers=["字段", "CLIP prompt similarity", "caption 中是否出现"], label="字段级 prompt grounding 特征", wrap=True)
-                        ntc_raw = gr.Code(label="完整 JSON 输出", language="json")
-                ntc_btn.click(run_no_true_context_attr, inputs=[ntc_image, ntc_caption], outputs=[ntc_summary, ntc_label, ntc_sims, ntc_raw])
-                gr.Examples(examples=NO_TRUE_CONTEXT_EXAMPLES, inputs=[ntc_image, ntc_caption])
-
-            with gr.Tab("VDT-COVE-Attr 主系统"):
-                gr.Markdown("## Oracle/评测辅助：VDT 主分类 + COVE-lite 真实语境 + 字段级归因\n该页会输入 `true_image_context`，因此不要把它说成最终数据集外推理路线。")
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        case = gr.Dropdown(label="选择演示样例", choices=CASE_KEYS, value=CASE_KEYS[0])
-                        current = gr.Textbox(label="Current caption / 当前新闻文本", lines=4)
-                        true_ctx = gr.Textbox(label="True image context / 图片真实语境", lines=4)
-                        sample_id = gr.Textbox(label="sample_id", visible=False)
-                        image_id = gr.Textbox(label="image_id", visible=False)
-                        domain = gr.Textbox(label="domain", visible=False)
-                        demo_point = gr.Markdown()
-                        run_btn = gr.Button("运行 VDT-COVE-Attr", variant="primary")
-                    with gr.Column(scale=1):
-                        summary = gr.Markdown()
-                        evidence = gr.JSON(label="Evidence relevance / sufficiency")
-                        event_table = gr.Dataframe(headers=["字段", "current caption", "true image context"], label="事件字段抽取对比", wrap=True)
-                        nli_table = gr.Dataframe(headers=["字段", "NLI标签", "当前值", "真实语境值", "置信度", "解释"], label="Field-wise NLI / 字段矛盾判断", wrap=True)
-                        raw = gr.Code(label="完整系统 JSON", language="json")
-                case.change(load_cove_case, inputs=[case], outputs=[current, true_ctx, sample_id, image_id, domain, demo_point])
-                run_btn.click(run_cove_attr, inputs=[case, current, true_ctx, sample_id, image_id, domain], outputs=[summary, evidence, event_table, nli_table, raw])
-                app.load(load_cove_case, inputs=[case], outputs=[current, true_ctx, sample_id, image_id, domain, demo_point])
-
-            with gr.Tab("单样本调试/旧版备用"):
-                gr.Markdown("该页保留旧版手动 `image_context` 调试能力，用于快速展示字段抽取；主答辩请优先使用第一个 tab。")
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        image = gr.Image(label="新闻图片（可选；当前 demo 不直接识图）", type="filepath")
-                        text = gr.Textbox(label="新闻文本 / Caption", lines=5)
-                        image_context = gr.Textbox(label="图像上下文 / Evidence", lines=5)
-                        btn = gr.Button("开始检测", variant="primary")
-                    with gr.Column(scale=1):
-                        legacy_summary = gr.Markdown()
-                        legacy_scores = gr.Label(label="事件字段一致性分数")
-                        legacy_json = gr.Code(label="完整 JSON 输出", language="json")
-                btn.click(run_legacy_demo, inputs=[image, text, image_context], outputs=[legacy_summary, legacy_scores, legacy_json])
-                gr.Examples(examples=LEGACY_EXAMPLES, inputs=[image, text, image_context])
-
-            with gr.Tab("分类不降验证"):
-                gr.Markdown("## Accuracy-preserving / Sidecar 验证\n即使解释模块发现冲突，最终 label 仍继承 VDT baseline。")
-                with gr.Row():
-                    with gr.Column(scale=1):
-                        guard_text = gr.Textbox(label="新闻文本 / Caption", lines=4, value="A large protest erupted in Paris on Monday after a new climate policy.")
-                        guard_ctx = gr.Textbox(label="图像上下文 / Evidence", lines=4, value="People gathered in London during a climate demonstration on Monday.")
-                        guard_label = gr.Radio(label="VDT baseline label", choices=["OOC", "Non-OOC", "Uncertain"], value="Non-OOC")
-                        guard_score = gr.Slider(label="VDT baseline score", minimum=0.0, maximum=1.0, value=0.91, step=0.01)
-                        guard_btn = gr.Button("验证 sidecar 不覆盖主分类", variant="primary")
-                    with gr.Column(scale=1):
-                        guard_summary = gr.Markdown()
-                        guard_scores = gr.Label(label="事件字段一致性分数")
-                        guard_json = gr.Code(label="完整 JSON 输出", language="json")
-                guard_btn.click(run_guardrail_demo, inputs=[guard_text, guard_ctx, guard_label, guard_score], outputs=[guard_summary, guard_scores, guard_json])
-
-            with gr.Tab("复现实验指标"):
-                gr.Markdown(render_reproduction_metrics())
-
-            with gr.Tab("实验看板"):
-                gr.Markdown(render_experiment_board())
+    with gr.Blocks(title="VDT-CF-Attr", css=CUSTOM_CSS, theme=gr.themes.Base()) as app:
+        with gr.Column(elem_id="main-shell"):
+            gr.HTML(
+                """
+                <div class="hero">
+                  <div class="kicker">AI content safety · OOC attribution</div>
+                  <h1>图文内容挪用检测与错配归因</h1>
+                  <p>上传一张新闻图片并输入当前配文。系统自动进行 OOC 判定，并在不输入 true context 的条件下输出错配类型、可信度与冲突字段。</p>
+                </div>
+                """
+            )
+            with gr.Column(elem_classes=["input-panel"]):
+                image = gr.Image(label="图片上传", type="filepath", height=320)
+                caption = gr.Textbox(
+                    label="文字输入",
+                    placeholder="输入与图片配对的新闻文本，例如：A large protest erupted in Paris on Monday after a new climate policy.",
+                    lines=4,
+                )
+                run_btn = gr.Button("开始分析", elem_id="run-btn")
+            output = gr.HTML(value=_empty_card("上传图片并输入文本后，点击“开始分析”。"))
+            gr.HTML("<footer>VDT-CF-Attr · no-true-context image+caption attribution head · true context is not used at inference.</footer>")
+            run_btn.click(fn=run_inference, inputs=[image, caption], outputs=output)
     return app
 
 
-def _pick_port() -> int:
-    explicit = os.environ.get("GRADIO_SERVER_PORT")
-    if explicit:
-        return int(explicit)
-    start = int(os.environ.get("GRADIO_SERVER_PORT_BASE", "7860"))
-    host = os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1")
-    for port in range(start, start + 30):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            try:
-                sock.bind((host, port))
-            except OSError:
-                continue
-            return port
-    raise RuntimeError(f"Cannot find empty port in range: {start}-{start + 29}")
-
-
 if __name__ == "__main__":
-    host = os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1")
-    port = _pick_port()
-    print(f"[E3-VDT-OOC] launching demo: http://{host}:{port}", flush=True)
+    port = int(os.environ.get("PORT", "7860"))
+    host = os.environ.get("HOST", "127.0.0.1")
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((host, port))
+    except OSError:
+        port = 0
     build_app().launch(server_name=host, server_port=port)
