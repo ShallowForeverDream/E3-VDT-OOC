@@ -14,11 +14,18 @@ except Exception as exc:  # pragma: no cover
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from e3vdt.inference.pipeline import E3VDTPipeline
 from e3vdt.inference.cove_attr_pipeline import VDTCOVEAttrPipeline
+
+try:
+    from scripts.infer.infer_vdt_cf_attr import predict as predict_vdt_cf_attr
+except Exception:
+    predict_vdt_cf_attr = None
 
 legacy_pipe = E3VDTPipeline()
 cove_pipe = VDTCOVEAttrPipeline()
@@ -49,6 +56,36 @@ LEGACY_EXAMPLES = _load_legacy_examples()
 COVE_CASES = read_jsonl(ROOT / "examples" / "cove_attr_demo_cases.jsonl")
 CASE_BY_KEY = {f"{r['sample_id']} | {r.get('title','')}": r for r in COVE_CASES}
 CASE_KEYS = list(CASE_BY_KEY) or ["manual"]
+
+
+def _load_no_true_context_examples():
+    rows = []
+    local_cases = read_jsonl(ROOT / "outputs" / "no_true_context_attr_demo_cases.jsonl")
+    if local_cases:
+        for item in local_cases:
+            p = Path(str(item.get("image", "")))
+            if not p.is_absolute():
+                p = ROOT / p
+            rows.append([
+                str(p) if p.exists() else None,
+                item.get("caption", ""),
+                item.get("vdt_label", "OOC"),
+                float(item.get("vdt_score", 0.87) or 0.87),
+                item.get("gold_mismatch_type", ""),
+            ])
+    if rows:
+        return rows
+    # Fallback examples are only for UI smoke testing.  The no-true-context
+    # model may not match these placeholder images; use the exported local
+    # VisualNews cases above for a stronger live demo.
+    return [
+        [str(ROOT / "examples/demo_images/london_climate_demonstration_monday.png"), "A large protest erupted in Paris on Monday after a new climate policy.", "OOC", 0.87, "demo placeholder"],
+        [str(ROOT / "examples/demo_images/elon_musk_beijing_2024.png"), "Barack Obama will meet officials in Beijing in 2024.", "OOC", 0.87, "demo placeholder"],
+        [str(ROOT / "examples/demo_images/flood_shanghai_2024.png"), "A flood caused evacuations in Shanghai in 2024.", "Non-OOC", 0.91, "demo placeholder"],
+    ]
+
+
+NO_TRUE_CONTEXT_EXAMPLES = _load_no_true_context_examples()
 
 
 def _load_reproduction_metrics():
@@ -160,6 +197,59 @@ def run_cove_attr(case_key: str, current_caption: str, true_context: str, vdt_la
     return summary, evidence_summary, _event_table(obj), _field_table(obj), json.dumps(obj, ensure_ascii=False, indent=2)
 
 
+def run_no_true_context_attr(image, caption: str, vdt_label: str, vdt_score: float):
+    if predict_vdt_cf_attr is None:
+        return (
+            "### VDT-CF-Attr 未加载\n\n`predict_vdt_cf_attr` 导入失败，请检查 `scripts/infer/infer_vdt_cf_attr.py` 和依赖。",
+            {},
+            [],
+            "{}",
+        )
+    image_path = image if isinstance(image, str) else ""
+    if not image_path:
+        return (
+            "### 请先上传图片\n\n新版 VDT-CF-Attr 推理阶段不使用 true context，因此必须提供 image + current_caption。",
+            {},
+            [],
+            "{}",
+        )
+    obj = predict_vdt_cf_attr(
+        image_path=image_path,
+        caption=caption or "",
+        vdt_label=vdt_label or "OOC",
+        vdt_score=float(vdt_score),
+        model_path=str(ROOT / "outputs/no_true_context_attr/no_true_context_attr_head.pkl"),
+        device=os.environ.get("VDT_CF_ATTR_DEVICE", "cuda"),
+    )
+    conflicts = ", ".join(obj.get("conflict_fields") or []) or "无明确冲突"
+    summary = f"""
+### VDT-CF-Attr 输出（不输入 true context）
+
+- **VDT 主分类**：{obj['vdt_label']} / score={obj['vdt_score']}
+- **错配类型**：**{obj['mismatch_type']}**
+- **冲突字段**：`{conflicts}`
+- **置信度**：{obj['confidence']}
+- **视觉证据状态**：{obj['evidence_status']}
+- **是否使用 true context**：`{obj['uses_true_context']}`
+- **决策来源**：`{obj['decision_source']}`
+
+{obj['explanation']}
+
+> 答辩口径：这是最终应用路线的演示入口。它只输入图片和当前 caption；true context 只用于训练构造和评测参考，不进入推理。
+""".strip()
+    fs = obj.get("feature_summary", {})
+    sim_rows = []
+    for field, val in (fs.get("prompt_sims") or {}).items():
+        sim_rows.append([field, val, (fs.get("field_presence") or {}).get(field, 0)])
+    label = {
+        "mismatch_type": obj.get("mismatch_type"),
+        "confidence": obj.get("confidence"),
+        "uses_true_context": obj.get("uses_true_context"),
+        "clip_caption_sim": fs.get("clip_caption_sim"),
+    }
+    return summary, label, sim_rows, json.dumps(obj, ensure_ascii=False, indent=2)
+
+
 def run_legacy_demo(image, text, image_context):
     image_path = image if isinstance(image, str) else None
     obj = legacy_pipe.predict(text=text, image_path=image_path, image_context=image_context).to_dict()
@@ -212,7 +302,7 @@ def render_system_dashboard() -> str:
     return f"""
 # VDT-COVE-Attr 可验收系统演示
 
-**技术路线**：VDT baseline → COVE-lite true image context → evidence relevance / sufficiency → field-wise NLI attribution → 结构化解释。
+**技术路线**：VDT baseline → controlled counterfactual attribution training → no-true-context image+caption attribution head；COVE-lite true context 仅作为 oracle/构造/评测辅助。
 
 | 模块 | 系统状态 | 答辩口径 |
 |---|---|---|
@@ -220,11 +310,12 @@ def render_system_dashboard() -> str:
 | COVE-lite true context | demo 已接入 | 使用 VisualNews 原始 caption/article metadata 作为图片真实语境 |
 | Evidence relevance | demo 已接入 | 证据不足时输出 evidence insufficient，避免强行解释 |
 | Field-wise NLI attribution | demo 已接入 | 输出 entity/location/time/event_type/relation 字段矛盾 |
+| VDT-CF-Attr no-true-context | demo 已接入 | 推理只用 image + caption + VDT score，不输入 true context |
 | 大规模归因实验 | 可运行脚本已准备，结果待补 | 答辩后用人工 gold set + ablation 验证解释可靠性 |
 
 {pilot}
 
-**明天演示顺序**：先讲本页路线 → 打开“VDT-COVE-Attr 主系统”跑 3 个样例 → 打开“分类不降验证”证明 sidecar 不覆盖 VDT → 打开“复现实验指标”。
+**明天演示顺序**：先讲本页路线 → 打开“VDT-CF-Attr 无 true context”跑本地反事实样例 → 打开“VDT-COVE-Attr oracle”说明上限/评测辅助 → 打开“分类不降验证”证明 sidecar 不覆盖 VDT → 打开“复现实验指标”。
 """.strip()
 
 
@@ -259,8 +350,25 @@ def build_app():
     with gr.Blocks(title="VDT-COVE-Attr OOC System") as app:
         gr.Markdown(render_system_dashboard())
         with gr.Tabs():
+            with gr.Tab("VDT-CF-Attr 无 true context"):
+                gr.Markdown("## 最终应用路线：只输入 image + current caption + VDT score\n该页不提供 `true_image_context` 输入；若本地存在 `outputs/no_true_context_attr/no_true_context_attr_head.pkl`，会加载 no-true-context attribution head，否则回退到 field-prompt grounding rule。")
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        ntc_image = gr.Image(label="新闻图片 / Image", type="filepath")
+                        ntc_caption = gr.Textbox(label="Current caption / 当前新闻文本", lines=4)
+                        ntc_vdt_label = gr.Radio(label="VDT baseline label", choices=["OOC", "Non-OOC", "Uncertain"], value="OOC")
+                        ntc_vdt_score = gr.Slider(label="VDT baseline score", minimum=0.0, maximum=1.0, value=0.87, step=0.01)
+                        ntc_btn = gr.Button("运行 VDT-CF-Attr", variant="primary")
+                    with gr.Column(scale=1):
+                        ntc_summary = gr.Markdown()
+                        ntc_label = gr.Label(label="No-true-context attribution summary")
+                        ntc_sims = gr.Dataframe(headers=["字段", "CLIP prompt similarity", "caption 中是否出现"], label="字段级 prompt grounding 特征", wrap=True)
+                        ntc_raw = gr.Code(label="完整 JSON 输出", language="json")
+                ntc_btn.click(run_no_true_context_attr, inputs=[ntc_image, ntc_caption, ntc_vdt_label, ntc_vdt_score], outputs=[ntc_summary, ntc_label, ntc_sims, ntc_raw])
+                gr.Examples(examples=NO_TRUE_CONTEXT_EXAMPLES, inputs=[ntc_image, ntc_caption, ntc_vdt_label, ntc_vdt_score])
+
             with gr.Tab("VDT-COVE-Attr 主系统"):
-                gr.Markdown("## 主线演示：VDT 主分类 + COVE-lite 真实语境 + 字段级归因")
+                gr.Markdown("## Oracle/评测辅助：VDT 主分类 + COVE-lite 真实语境 + 字段级归因\n该页会输入 `true_image_context`，因此不要把它说成最终数据集外推理路线。")
                 with gr.Row():
                     with gr.Column(scale=1):
                         case = gr.Dropdown(label="选择演示样例", choices=CASE_KEYS, value=CASE_KEYS[0])

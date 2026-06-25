@@ -171,6 +171,23 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_attr_expe
   -BatchSize 16
 ```
 
+单样本推理：
+
+```powershell
+python scripts\infer\infer_vdt_cf_attr.py `
+  --image examples\demo_images\london_climate_demonstration_monday.png `
+  --caption "A large protest erupted in Paris on Monday after a new climate policy." `
+  --vdt-label OOC `
+  --vdt-score 0.87
+```
+
+导出本地可演示样例：
+
+```powershell
+python scripts\export_no_true_context_demo_cases.py --n 8 --device cuda
+python demo\app.py
+```
+
 当前一次本地结果（`MaxPerType=80`，group split，test=38，CLIP image+caption features）：
 
 | Method | Uses true context at inference? | Type Acc | Field Micro-F1 | Exact Match |
