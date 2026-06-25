@@ -27,15 +27,16 @@ def main() -> None:
 
     ctx = read_json("outputs/cove_lite_context_pairs.jsonl.stats.json")
     rows.append("## Table 2. COVE-lite true-context construction\n")
-    rows.append("| Total | Kept | Missing IDs | Missing text | Missing true context | Coverage |\n|---:|---:|---:|---:|---:|---:|\n")
+    rows.append("| Total | Available before cap | Sampled/kept | Missing IDs | Missing text | Missing true context | Coverage before cap |\n|---:|---:|---:|---:|---:|---:|---:|\n")
     if ctx:
         st = ctx.get("stats", ctx)
         total = st.get("total", 0)
         kept = st.get("kept", 0)
-        cov = kept / total if total else 0.0
-        rows.append(f"| {total} | {kept} | {st.get('missing_ids', 0)} | {st.get('missing_text', 0)} | {st.get('missing_true_context', 0)} | {cov:.4f} |\n\n")
+        available = st.get("available_before_cap", kept)
+        cov = available / total if total else 0.0
+        rows.append(f"| {total} | {available} | {kept} | {st.get('missing_ids', 0)} | {st.get('missing_text', 0)} | {st.get('missing_true_context', 0)} | {cov:.4f} |\n\n")
     else:
-        rows.append("| 待跑 | 待跑 | 待跑 | 待跑 | 待跑 | 待跑 |\n\n")
+        rows.append("| 待跑 | 待跑 | 待跑 | 待跑 | 待跑 | 待跑 | 待跑 |\n\n")
 
     ev = read_json("outputs/event_tuples_v2.jsonl.stats.json")
     rows.append("## Table 3. Event tuple extraction coverage\n")

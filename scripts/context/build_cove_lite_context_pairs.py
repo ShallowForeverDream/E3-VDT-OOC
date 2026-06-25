@@ -186,15 +186,81 @@ def source_from_file(path: Path) -> str:
     return s
 
 
+def find_origin_data_json(metadata_dir: Path) -> Optional[Path]:
+    candidates = [
+        metadata_dir / "data.json",
+        metadata_dir / "origin" / "data.json",
+        metadata_dir.parent / "origin" / "data.json",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+def load_origin_data_index(metadata_dir: Path) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
+    """Load VisualNews origin/data.json when available.
+
+    articles_metadata/*.p mostly stores IDs and article paths.  The actual image
+    caption/title context needed for COVE-lite is usually in origin/data.json.
+    We therefore prefer origin/data.json and keep pickle metadata as a fallback.
+    """
+
+    path = find_origin_data_json(metadata_dir)
+    if not path:
+        return {}, {"file": None, "records": 0, "kept_with_context": 0, "status": "not_found"}
+    obj = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(obj, list):
+        records = [x for x in obj if isinstance(x, dict)]
+    elif isinstance(obj, dict):
+        records = []
+        for key, val in obj.items():
+            if isinstance(val, dict):
+                rec = dict(val)
+                rec.setdefault("id", key)
+                records.append(rec)
+    else:
+        records = []
+
+    index: Dict[str, Dict[str, Any]] = {}
+    kept = 0
+    for rec in records:
+        ctx = best_context(rec)
+        if not ctx:
+            continue
+        ids = unique([
+            rec.get("id"),
+            rec.get("image_id"),
+            rec.get("ori_id"),
+        ] + collect_ids(rec))
+        if not ids:
+            continue
+        kept += 1
+        entry = {
+            "context": ctx,
+            "source": str(rec.get("source") or "visualnews_origin"),
+            "metadata_file": str(path),
+            "raw_key": str(rec.get("id", "")),
+            "topic": rec.get("topic", ""),
+            "article_path": rec.get("article_path", ""),
+            "image_path": rec.get("image_path", ""),
+        }
+        for idv in ids:
+            index.setdefault(idv, entry)
+    return index, {"file": str(path), "records": len(records), "kept_with_context": kept, "status": "loaded"}
+
+
 def build_metadata_index(metadata_dir: Path) -> Dict[str, Dict[str, Any]]:
+    origin_index, origin_debug = load_origin_data_index(metadata_dir)
+    index: Dict[str, Dict[str, Any]] = dict(origin_index)
+
     files = []
     for pat in ["*.p", "*.pkl", "*.pickle"]:
         files.extend(metadata_dir.rglob(pat))
     files = sorted(set(files))
-    if not files:
+    if not files and not index:
         raise FileNotFoundError(f"No metadata pickle files found under {metadata_dir}")
 
-    index: Dict[str, Dict[str, Any]] = {}
     debug = []
     for path in files:
         try:
@@ -220,7 +286,7 @@ def build_metadata_index(metadata_dir: Path) -> Dict[str, Dict[str, Any]]:
             for idv in ids:
                 index.setdefault(idv, entry)
         debug.append({"file": str(path), "records": n, "kept_with_context": kept})
-    print(json.dumps({"metadata_files": debug, "index_size": len(index)}, ensure_ascii=False, indent=2), file=sys.stderr)
+    print(json.dumps({"origin_data": origin_debug, "metadata_files": debug, "index_size": len(index)}, ensure_ascii=False, indent=2), file=sys.stderr)
     return index
 
 
@@ -366,11 +432,14 @@ def main() -> None:
             "newsclippings_file": str(path),
         })
 
+    available_before_cap = len(rows)
     rows = maybe_sample(rows, args.max_records, args.seed)
     with out_path.open("w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     stats["kept"] = len(rows)
+    stats["available_before_cap"] = available_before_cap
+    stats["max_records"] = args.max_records
     out_path.with_suffix(out_path.suffix + ".stats.json").write_text(json.dumps(stats, indent=2, ensure_ascii=False), encoding="utf-8")
     print(json.dumps({"output": str(out_path), "stats": stats}, indent=2, ensure_ascii=False))
 
