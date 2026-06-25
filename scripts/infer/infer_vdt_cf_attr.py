@@ -201,6 +201,11 @@ def postprocess_prediction(
     actually detected.  For example, when `entity_present=0`, the final JSON
     must not claim `entity mismatch`; otherwise the demo is logically
     inconsistent and hard to defend.
+
+    If VDT predicts OOC but the attribution head predicts a benign label, the
+    final output is not downgraded to Non-OOC.  It is converted to `uncertain`,
+    because the proper interpretation is: OOC was detected, but this lightweight
+    no-true-context head did not find reliable field-level visual evidence.
     """
     original_type = mismatch_type
     original_fields = set(conflict_fields)
@@ -210,11 +215,14 @@ def postprocess_prediction(
     if mismatch_type == "none":
         mismatch_type = "benign illustrative image"
 
-    if _is_non_ooc_label(vdt_label) or mismatch_type == "benign illustrative image":
+    if _is_non_ooc_label(vdt_label):
         final_fields: Set[str] = set()
         applied = original_type != "benign illustrative image" or bool(original_fields)
-        reason = "vdt_non_ooc_or_benign_gate" if applied else "no_change"
+        reason = "vdt_non_ooc_gate" if applied else "no_change"
         return "benign illustrative image", final_fields, applied, reason
+
+    if mismatch_type == "benign illustrative image":
+        return UNCERTAIN_TYPE, {"evidence_insufficient"}, True, "vdt_ooc_but_attr_head_predicted_benign"
 
     present = _present_fields(feat)
     valid_conflicts = {f for f in conflict_fields if f in present}
@@ -363,7 +371,7 @@ def predict(
     if mismatch_type == "benign illustrative image":
         explanation = "VDT-CF-Attr 未发现明确字段错配，或 VDT 主分类为 Non-OOC。"
     elif mismatch_type == UNCERTAIN_TYPE:
-        explanation = "VDT 未确认该样本为 OOC，或图片/视觉语言特征不足；系统不进入细粒度归因，也不强行解释具体错配类型。"
+        explanation = "VDT 认为该样本可能 OOC，但 no-true-context 归因头缺少足够可靠的字段级视觉证据；系统不强行解释具体错配类型。"
     else:
         explanation = f"VDT 判断为 {vdt_label}；VDT-CF-Attr 在不使用 true context 的条件下预测主要错配类型为 {mismatch_type}，冲突字段为 {', '.join(sorted(conflict_fields)) or 'unknown'}。"
 
