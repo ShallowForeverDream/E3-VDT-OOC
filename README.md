@@ -41,6 +41,7 @@ python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt
 python -m pip install -e .
 python scripts/check_project.py
+python scripts/run_cove_attr_demo_cases.py
 python scripts/run_demo_cases.py
 python scripts/check_accuracy_preserving.py
 python scripts/check_final_deliverables.py
@@ -105,8 +106,9 @@ python scripts/eval/run_attribution_baselines.py `
 2. [`docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md`](docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md)
 3. [`docs/INNOVATION_POINTS.md`](docs/INNOVATION_POINTS.md)
 4. [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md)
-5. [`docs/ppt/PPT_COVE_LITE_REVISION.md`](docs/ppt/PPT_COVE_LITE_REVISION.md)
-6. [`docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md`](docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md)
+5. [`docs/SYSTEM_DEMO_ACCEPTANCE.md`](docs/SYSTEM_DEMO_ACCEPTANCE.md)
+6. [`docs/ppt/PPT_COVE_LITE_REVISION.md`](docs/ppt/PPT_COVE_LITE_REVISION.md)
+7. [`docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md`](docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md)
 
 ## 大文件约定
 

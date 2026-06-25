@@ -1,0 +1,1 @@
+{"sample_id":"example-1","current_caption":"Current caption here.","true_image_context":"True image context here.","gold_mismatch_type":"location mismatch","gold_conflict_fields":["location"],"rationale":"current caption and true context disagree on location","annotator":"A","annotation_status":"done"}

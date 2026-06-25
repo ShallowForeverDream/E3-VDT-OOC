@@ -1,0 +1,1272 @@
+[
+  {
+    "input": {
+      "sample_id": "route01_location_time",
+      "image_id": "demo_london_2019",
+      "domain": "demo_hard_negative",
+      "title": "地点+时间错配：Paris claim vs London 2019 image context",
+      "vdt_label": "OOC",
+      "vdt_score": 0.91,
+      "current_caption": "Protesters marched in Paris on Monday after a new climate policy.",
+      "true_image_context": "Demonstrators gathered in London in 2019 during a climate protest.",
+      "gold_mismatch_type": "location mismatch",
+      "gold_conflict_fields": [
+        "location",
+        "time"
+      ],
+      "demo_point": "展示 COVE-lite 用图片真实语境指出地点和时间冲突。"
+    },
+    "actual": {
+      "sample_id": "route01_location_time",
+      "image_id": "demo_london_2019",
+      "domain": "demo_hard_negative",
+      "method_version": "vdt-cove-attr-system-demo-v1",
+      "technical_route": "VDT baseline + COVE-lite true context + evidence relevance + field-wise NLI attribution",
+      "classification_policy": "baseline_preserving_sidecar",
+      "current_caption": "Protesters marched in Paris on Monday after a new climate policy.",
+      "true_image_context": "Demonstrators gathered in London in 2019 during a climate protest.",
+      "vdt": {
+        "label": "OOC",
+        "score": 0.91
+      },
+      "final_label": "OOC",
+      "decision_source": "vdt_baseline",
+      "classification_note": "主分类继承 VDT；COVE-Attr 只输出归因，不覆盖 final_label。",
+      "mismatch_type": "location mismatch",
+      "conflict_fields": [
+        "location",
+        "time"
+      ],
+      "evidence_relevance": {
+        "score": 0.5023,
+        "level": "medium",
+        "sufficient": true,
+        "token_overlap": 0.0909,
+        "event_overlap": 0.487,
+        "context_length": 10,
+        "rationale": "true context 提供部分相关证据，归因结果需要人工复核。"
+      },
+      "current_event": {
+        "source": "current_caption",
+        "raw_text": "Protesters marched in Paris on Monday after a new climate policy.",
+        "entities": [
+          "Protesters"
+        ],
+        "locations": [
+          "paris"
+        ],
+        "times": [
+          "Monday"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "true_event": {
+        "source": "true_image_context",
+        "raw_text": "Demonstrators gathered in London in 2019 during a climate protest.",
+        "entities": [
+          "Demonstrators"
+        ],
+        "locations": [
+          "london"
+        ],
+        "times": [
+          "2019"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "field_nli": {
+        "entity": {
+          "field": "entity",
+          "label": "neutral",
+          "confidence": 0.6,
+          "current_values": [
+            "Protesters"
+          ],
+          "true_values": [
+            "Demonstrators"
+          ],
+          "score": 0.4348,
+          "hypothesis": "当前 caption 声称主体/实体为：Protesters。",
+          "evidence": "图片真实语境显示主体/实体为：Demonstrators。",
+          "rationale": "两侧主体/实体部分相似但不足以判定强矛盾。"
+        },
+        "location": {
+          "field": "location",
+          "label": "contradiction",
+          "confidence": 1.0,
+          "current_values": [
+            "paris"
+          ],
+          "true_values": [
+            "london"
+          ],
+          "score": 0.0,
+          "hypothesis": "当前 caption 声称地点为：paris。",
+          "evidence": "图片真实语境显示地点为：london。",
+          "rationale": "两侧地点明显不同，构成候选冲突字段。"
+        },
+        "time": {
+          "field": "time",
+          "label": "contradiction",
+          "confidence": 1.0,
+          "current_values": [
+            "Monday"
+          ],
+          "true_values": [
+            "2019"
+          ],
+          "score": 0.0,
+          "hypothesis": "当前 caption 声称时间为：Monday。",
+          "evidence": "图片真实语境显示时间为：2019。",
+          "rationale": "两侧时间明显不同，构成候选冲突字段。"
+        },
+        "event_type": {
+          "field": "event_type",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "protest"
+          ],
+          "true_values": [
+            "protest"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称事件类型为：protest。",
+          "evidence": "图片真实语境显示事件类型为：protest。",
+          "rationale": "两侧事件类型高度一致。"
+        },
+        "relation": {
+          "field": "relation",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "gather"
+          ],
+          "true_values": [
+            "gather"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称动作/关系为：gather。",
+          "evidence": "图片真实语境显示动作/关系为：gather。",
+          "rationale": "两侧动作/关系高度一致。"
+        }
+      },
+      "explanation": "VDT 判断为 OOC；COVE-Attr 的主错配类型为 location mismatch。冲突字段：location: 当前=paris；真实语境=london；time: 当前=Monday；真实语境=2019。证据相关性=medium(0.5023)。",
+      "experiment_status": {
+        "system_demo": "completed",
+        "vdt_reproduction": "completed_core_two_domains",
+        "large_scale_attribution_eval": "pending_or_running",
+        "claim_boundary": "当前演示证明系统闭环；归因有效性需以人工 gold set 与 ablation 结果为准。"
+      }
+    }
+  },
+  {
+    "input": {
+      "sample_id": "route02_benign",
+      "image_id": "demo_london_cup",
+      "domain": "demo_non_ooc",
+      "title": "正常匹配：体育新闻图文一致",
+      "vdt_label": "Non-OOC",
+      "vdt_score": 0.88,
+      "current_caption": "A football team celebrates after winning the cup in London in 2024.",
+      "true_image_context": "A football team celebrates after winning the cup in London in 2024.",
+      "gold_mismatch_type": "benign illustrative image",
+      "gold_conflict_fields": [],
+      "demo_point": "展示系统不会把字段一致样本强行解释成 OOC。"
+    },
+    "actual": {
+      "sample_id": "route02_benign",
+      "image_id": "demo_london_cup",
+      "domain": "demo_non_ooc",
+      "method_version": "vdt-cove-attr-system-demo-v1",
+      "technical_route": "VDT baseline + COVE-lite true context + evidence relevance + field-wise NLI attribution",
+      "classification_policy": "baseline_preserving_sidecar",
+      "current_caption": "A football team celebrates after winning the cup in London in 2024.",
+      "true_image_context": "A football team celebrates after winning the cup in London in 2024.",
+      "vdt": {
+        "label": "Non-OOC",
+        "score": 0.88
+      },
+      "final_label": "Non-OOC",
+      "decision_source": "vdt_baseline",
+      "classification_note": "主分类继承 VDT；COVE-Attr 只输出归因，不覆盖 final_label。",
+      "mismatch_type": "benign illustrative image",
+      "conflict_fields": [],
+      "evidence_relevance": {
+        "score": 1.0,
+        "level": "high",
+        "sufficient": true,
+        "token_overlap": 1.0,
+        "event_overlap": 1.0,
+        "context_length": 12,
+        "rationale": "true context 与 current caption 有足够语义/事件字段关联，可用于字段归因。"
+      },
+      "current_event": {
+        "source": "current_caption",
+        "raw_text": "A football team celebrates after winning the cup in London in 2024.",
+        "entities": [],
+        "locations": [
+          "london"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "sports"
+        ],
+        "relations": [
+          "win"
+        ]
+      },
+      "true_event": {
+        "source": "true_image_context",
+        "raw_text": "A football team celebrates after winning the cup in London in 2024.",
+        "entities": [],
+        "locations": [
+          "london"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "sports"
+        ],
+        "relations": [
+          "win"
+        ]
+      },
+      "field_nli": {
+        "entity": {
+          "field": "entity",
+          "label": "unknown",
+          "confidence": 0.5,
+          "current_values": [],
+          "true_values": [],
+          "score": 0.5,
+          "hypothesis": "当前 caption 声称未明确给出主体/实体。",
+          "evidence": "图片真实语境显示未明确给出主体/实体。",
+          "rationale": "两侧都没有抽取到主体/实体，不把缺失当作冲突。"
+        },
+        "location": {
+          "field": "location",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "london"
+          ],
+          "true_values": [
+            "london"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称地点为：london。",
+          "evidence": "图片真实语境显示地点为：london。",
+          "rationale": "两侧地点高度一致。"
+        },
+        "time": {
+          "field": "time",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "2024"
+          ],
+          "true_values": [
+            "2024"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称时间为：2024。",
+          "evidence": "图片真实语境显示时间为：2024。",
+          "rationale": "两侧时间高度一致。"
+        },
+        "event_type": {
+          "field": "event_type",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "sports"
+          ],
+          "true_values": [
+            "sports"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称事件类型为：sports。",
+          "evidence": "图片真实语境显示事件类型为：sports。",
+          "rationale": "两侧事件类型高度一致。"
+        },
+        "relation": {
+          "field": "relation",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "win"
+          ],
+          "true_values": [
+            "win"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称动作/关系为：win。",
+          "evidence": "图片真实语境显示动作/关系为：win。",
+          "rationale": "两侧动作/关系高度一致。"
+        }
+      },
+      "explanation": "VDT 主分类结果已保留；COVE-Attr 未发现明确字段矛盾，当前图文语境在可抽取事件字段上基本一致。",
+      "experiment_status": {
+        "system_demo": "completed",
+        "vdt_reproduction": "completed_core_two_domains",
+        "large_scale_attribution_eval": "pending_or_running",
+        "claim_boundary": "当前演示证明系统闭环；归因有效性需以人工 gold set 与 ablation 结果为准。"
+      }
+    }
+  },
+  {
+    "input": {
+      "sample_id": "route03_entity",
+      "image_id": "demo_musk_beijing",
+      "domain": "demo_entity",
+      "title": "主体错配：Obama claim vs Musk image context",
+      "vdt_label": "OOC",
+      "vdt_score": 0.86,
+      "current_caption": "Barack Obama will meet officials in Beijing in 2024.",
+      "true_image_context": "Elon Musk will meet officials in Beijing in 2024.",
+      "gold_mismatch_type": "entity mismatch",
+      "gold_conflict_fields": [
+        "entity"
+      ],
+      "demo_point": "地点、时间、关系一致，但主体不同。"
+    },
+    "actual": {
+      "sample_id": "route03_entity",
+      "image_id": "demo_musk_beijing",
+      "domain": "demo_entity",
+      "method_version": "vdt-cove-attr-system-demo-v1",
+      "technical_route": "VDT baseline + COVE-lite true context + evidence relevance + field-wise NLI attribution",
+      "classification_policy": "baseline_preserving_sidecar",
+      "current_caption": "Barack Obama will meet officials in Beijing in 2024.",
+      "true_image_context": "Elon Musk will meet officials in Beijing in 2024.",
+      "vdt": {
+        "label": "OOC",
+        "score": 0.86
+      },
+      "final_label": "OOC",
+      "decision_source": "vdt_baseline",
+      "classification_note": "主分类继承 VDT；COVE-Attr 只输出归因，不覆盖 final_label。",
+      "mismatch_type": "entity mismatch",
+      "conflict_fields": [
+        "entity"
+      ],
+      "evidence_relevance": {
+        "score": 0.715,
+        "level": "high",
+        "sufficient": true,
+        "token_overlap": 0.4286,
+        "event_overlap": 0.7857,
+        "context_length": 9,
+        "rationale": "true context 与 current caption 有足够语义/事件字段关联，可用于字段归因。"
+      },
+      "current_event": {
+        "source": "current_caption",
+        "raw_text": "Barack Obama will meet officials in Beijing in 2024.",
+        "entities": [
+          "Barack Obama"
+        ],
+        "locations": [
+          "beijing"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [],
+        "relations": [
+          "meet"
+        ]
+      },
+      "true_event": {
+        "source": "true_image_context",
+        "raw_text": "Elon Musk will meet officials in Beijing in 2024.",
+        "entities": [
+          "Elon Musk"
+        ],
+        "locations": [
+          "beijing"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [],
+        "relations": [
+          "meet"
+        ]
+      },
+      "field_nli": {
+        "entity": {
+          "field": "entity",
+          "label": "contradiction",
+          "confidence": 0.8571,
+          "current_values": [
+            "Barack Obama"
+          ],
+          "true_values": [
+            "Elon Musk"
+          ],
+          "score": 0.1429,
+          "hypothesis": "当前 caption 声称主体/实体为：Barack Obama。",
+          "evidence": "图片真实语境显示主体/实体为：Elon Musk。",
+          "rationale": "两侧主体/实体明显不同，构成候选冲突字段。"
+        },
+        "location": {
+          "field": "location",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "beijing"
+          ],
+          "true_values": [
+            "beijing"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称地点为：beijing。",
+          "evidence": "图片真实语境显示地点为：beijing。",
+          "rationale": "两侧地点高度一致。"
+        },
+        "time": {
+          "field": "time",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "2024"
+          ],
+          "true_values": [
+            "2024"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称时间为：2024。",
+          "evidence": "图片真实语境显示时间为：2024。",
+          "rationale": "两侧时间高度一致。"
+        },
+        "event_type": {
+          "field": "event_type",
+          "label": "unknown",
+          "confidence": 0.5,
+          "current_values": [],
+          "true_values": [],
+          "score": 0.5,
+          "hypothesis": "当前 caption 声称未明确给出事件类型。",
+          "evidence": "图片真实语境显示未明确给出事件类型。",
+          "rationale": "两侧都没有抽取到事件类型，不把缺失当作冲突。"
+        },
+        "relation": {
+          "field": "relation",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "meet"
+          ],
+          "true_values": [
+            "meet"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称动作/关系为：meet。",
+          "evidence": "图片真实语境显示动作/关系为：meet。",
+          "rationale": "两侧动作/关系高度一致。"
+        }
+      },
+      "explanation": "VDT 判断为 OOC；COVE-Attr 的主错配类型为 entity mismatch。冲突字段：entity: 当前=Barack Obama；真实语境=Elon Musk。证据相关性=high(0.715)。",
+      "experiment_status": {
+        "system_demo": "completed",
+        "vdt_reproduction": "completed_core_two_domains",
+        "large_scale_attribution_eval": "pending_or_running",
+        "claim_boundary": "当前演示证明系统闭环；归因有效性需以人工 gold set 与 ablation 结果为准。"
+      }
+    }
+  },
+  {
+    "input": {
+      "sample_id": "route04_event_type",
+      "image_id": "demo_football_paris",
+      "domain": "demo_event_type",
+      "title": "事件类型错配：health claim vs sports true context",
+      "vdt_label": "OOC",
+      "vdt_score": 0.84,
+      "current_caption": "A covid hospital opened in Paris in 2024.",
+      "true_image_context": "A football match took place in Paris in 2024.",
+      "gold_mismatch_type": "event-type mismatch",
+      "gold_conflict_fields": [
+        "event_type"
+      ],
+      "demo_point": "地点和时间一致，但事件类型冲突。"
+    },
+    "actual": {
+      "sample_id": "route04_event_type",
+      "image_id": "demo_football_paris",
+      "domain": "demo_event_type",
+      "method_version": "vdt-cove-attr-system-demo-v1",
+      "technical_route": "VDT baseline + COVE-lite true context + evidence relevance + field-wise NLI attribution",
+      "classification_policy": "baseline_preserving_sidecar",
+      "current_caption": "A covid hospital opened in Paris in 2024.",
+      "true_image_context": "A football match took place in Paris in 2024.",
+      "vdt": {
+        "label": "OOC",
+        "score": 0.84
+      },
+      "final_label": "OOC",
+      "decision_source": "vdt_baseline",
+      "classification_note": "主分类继承 VDT；COVE-Attr 只输出归因，不覆盖 final_label。",
+      "mismatch_type": "event-type mismatch",
+      "conflict_fields": [
+        "event_type"
+      ],
+      "evidence_relevance": {
+        "score": 0.5865,
+        "level": "high",
+        "sufficient": true,
+        "token_overlap": 0.125,
+        "event_overlap": 0.7222,
+        "context_length": 9,
+        "rationale": "true context 与 current caption 有足够语义/事件字段关联，可用于字段归因。"
+      },
+      "current_event": {
+        "source": "current_caption",
+        "raw_text": "A covid hospital opened in Paris in 2024.",
+        "entities": [],
+        "locations": [
+          "paris"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "health"
+        ],
+        "relations": []
+      },
+      "true_event": {
+        "source": "true_image_context",
+        "raw_text": "A football match took place in Paris in 2024.",
+        "entities": [],
+        "locations": [
+          "paris"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "sports"
+        ],
+        "relations": []
+      },
+      "field_nli": {
+        "entity": {
+          "field": "entity",
+          "label": "unknown",
+          "confidence": 0.5,
+          "current_values": [],
+          "true_values": [],
+          "score": 0.5,
+          "hypothesis": "当前 caption 声称未明确给出主体/实体。",
+          "evidence": "图片真实语境显示未明确给出主体/实体。",
+          "rationale": "两侧都没有抽取到主体/实体，不把缺失当作冲突。"
+        },
+        "location": {
+          "field": "location",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "paris"
+          ],
+          "true_values": [
+            "paris"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称地点为：paris。",
+          "evidence": "图片真实语境显示地点为：paris。",
+          "rationale": "两侧地点高度一致。"
+        },
+        "time": {
+          "field": "time",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "2024"
+          ],
+          "true_values": [
+            "2024"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称时间为：2024。",
+          "evidence": "图片真实语境显示时间为：2024。",
+          "rationale": "两侧时间高度一致。"
+        },
+        "event_type": {
+          "field": "event_type",
+          "label": "contradiction",
+          "confidence": 0.8333,
+          "current_values": [
+            "health"
+          ],
+          "true_values": [
+            "sports"
+          ],
+          "score": 0.1667,
+          "hypothesis": "当前 caption 声称事件类型为：health。",
+          "evidence": "图片真实语境显示事件类型为：sports。",
+          "rationale": "两侧事件类型明显不同，构成候选冲突字段。"
+        },
+        "relation": {
+          "field": "relation",
+          "label": "unknown",
+          "confidence": 0.5,
+          "current_values": [],
+          "true_values": [],
+          "score": 0.5,
+          "hypothesis": "当前 caption 声称未明确给出动作/关系。",
+          "evidence": "图片真实语境显示未明确给出动作/关系。",
+          "rationale": "两侧都没有抽取到动作/关系，不把缺失当作冲突。"
+        }
+      },
+      "explanation": "VDT 判断为 OOC；COVE-Attr 的主错配类型为 event-type mismatch。冲突字段：event_type: 当前=health；真实语境=sports。证据相关性=high(0.5865)。",
+      "experiment_status": {
+        "system_demo": "completed",
+        "vdt_reproduction": "completed_core_two_domains",
+        "large_scale_attribution_eval": "pending_or_running",
+        "claim_boundary": "当前演示证明系统闭环；归因有效性需以人工 gold set 与 ablation 结果为准。"
+      }
+    }
+  },
+  {
+    "input": {
+      "sample_id": "route05_relation",
+      "image_id": "demo_ukraine_convoy",
+      "domain": "demo_relation",
+      "title": "关系错配：attack claim vs meet context",
+      "vdt_label": "OOC",
+      "vdt_score": 0.82,
+      "current_caption": "Soldiers attacked a convoy in Ukraine in 2024.",
+      "true_image_context": "Soldiers met a convoy in Ukraine in 2024.",
+      "gold_mismatch_type": "relation mismatch",
+      "gold_conflict_fields": [
+        "relation"
+      ],
+      "demo_point": "主体、地点、时间相同，但动作关系冲突。"
+    },
+    "actual": {
+      "sample_id": "route05_relation",
+      "image_id": "demo_ukraine_convoy",
+      "domain": "demo_relation",
+      "method_version": "vdt-cove-attr-system-demo-v1",
+      "technical_route": "VDT baseline + COVE-lite true context + evidence relevance + field-wise NLI attribution",
+      "classification_policy": "baseline_preserving_sidecar",
+      "current_caption": "Soldiers attacked a convoy in Ukraine in 2024.",
+      "true_image_context": "Soldiers met a convoy in Ukraine in 2024.",
+      "vdt": {
+        "label": "OOC",
+        "score": 0.82
+      },
+      "final_label": "OOC",
+      "decision_source": "vdt_baseline",
+      "classification_note": "主分类继承 VDT；COVE-Attr 只输出归因，不覆盖 final_label。",
+      "mismatch_type": "relation mismatch",
+      "conflict_fields": [
+        "relation"
+      ],
+      "evidence_relevance": {
+        "score": 0.784,
+        "level": "high",
+        "sufficient": true,
+        "token_overlap": 0.6,
+        "event_overlap": 0.84,
+        "context_length": 8,
+        "rationale": "true context 与 current caption 有足够语义/事件字段关联，可用于字段归因。"
+      },
+      "current_event": {
+        "source": "current_caption",
+        "raw_text": "Soldiers attacked a convoy in Ukraine in 2024.",
+        "entities": [
+          "Soldiers"
+        ],
+        "locations": [
+          "ukraine"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "war/conflict"
+        ],
+        "relations": [
+          "attack"
+        ]
+      },
+      "true_event": {
+        "source": "true_image_context",
+        "raw_text": "Soldiers met a convoy in Ukraine in 2024.",
+        "entities": [
+          "Soldiers"
+        ],
+        "locations": [
+          "ukraine"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "war/conflict"
+        ],
+        "relations": [
+          "meet"
+        ]
+      },
+      "field_nli": {
+        "entity": {
+          "field": "entity",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "Soldiers"
+          ],
+          "true_values": [
+            "Soldiers"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称主体/实体为：Soldiers。",
+          "evidence": "图片真实语境显示主体/实体为：Soldiers。",
+          "rationale": "两侧主体/实体高度一致。"
+        },
+        "location": {
+          "field": "location",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "ukraine"
+          ],
+          "true_values": [
+            "ukraine"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称地点为：ukraine。",
+          "evidence": "图片真实语境显示地点为：ukraine。",
+          "rationale": "两侧地点高度一致。"
+        },
+        "time": {
+          "field": "time",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "2024"
+          ],
+          "true_values": [
+            "2024"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称时间为：2024。",
+          "evidence": "图片真实语境显示时间为：2024。",
+          "rationale": "两侧时间高度一致。"
+        },
+        "event_type": {
+          "field": "event_type",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "war/conflict"
+          ],
+          "true_values": [
+            "war/conflict"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称事件类型为：war/conflict。",
+          "evidence": "图片真实语境显示事件类型为：war/conflict。",
+          "rationale": "两侧事件类型高度一致。"
+        },
+        "relation": {
+          "field": "relation",
+          "label": "contradiction",
+          "confidence": 0.8,
+          "current_values": [
+            "attack"
+          ],
+          "true_values": [
+            "meet"
+          ],
+          "score": 0.2,
+          "hypothesis": "当前 caption 声称动作/关系为：attack。",
+          "evidence": "图片真实语境显示动作/关系为：meet。",
+          "rationale": "两侧动作/关系明显不同，构成候选冲突字段。"
+        }
+      },
+      "explanation": "VDT 判断为 OOC；COVE-Attr 的主错配类型为 relation mismatch。冲突字段：relation: 当前=attack；真实语境=meet。证据相关性=high(0.784)。",
+      "experiment_status": {
+        "system_demo": "completed",
+        "vdt_reproduction": "completed_core_two_domains",
+        "large_scale_attribution_eval": "pending_or_running",
+        "claim_boundary": "当前演示证明系统闭环；归因有效性需以人工 gold set 与 ablation 结果为准。"
+      }
+    }
+  },
+  {
+    "input": {
+      "sample_id": "route06_evidence_insufficient",
+      "image_id": "demo_missing_context",
+      "domain": "demo_sufficiency",
+      "title": "证据不足：没有图片真实语境",
+      "vdt_label": "OOC",
+      "vdt_score": 0.73,
+      "current_caption": "A fire broke out in New York in 2024.",
+      "true_image_context": "",
+      "gold_mismatch_type": "uncertain / evidence insufficient",
+      "gold_conflict_fields": [
+        "evidence_insufficient"
+      ],
+      "demo_point": "展示 evidence relevance/sufficiency gate：无证据时不强行解释。"
+    },
+    "actual": {
+      "sample_id": "route06_evidence_insufficient",
+      "image_id": "demo_missing_context",
+      "domain": "demo_sufficiency",
+      "method_version": "vdt-cove-attr-system-demo-v1",
+      "technical_route": "VDT baseline + COVE-lite true context + evidence relevance + field-wise NLI attribution",
+      "classification_policy": "baseline_preserving_sidecar",
+      "current_caption": "A fire broke out in New York in 2024.",
+      "true_image_context": "",
+      "vdt": {
+        "label": "OOC",
+        "score": 0.73
+      },
+      "final_label": "OOC",
+      "decision_source": "vdt_baseline",
+      "classification_note": "主分类继承 VDT；COVE-Attr 只输出归因，不覆盖 final_label。",
+      "mismatch_type": "uncertain / evidence insufficient",
+      "conflict_fields": [
+        "evidence_insufficient"
+      ],
+      "evidence_relevance": {
+        "score": 0.0875,
+        "level": "insufficient",
+        "sufficient": false,
+        "token_overlap": 0.0,
+        "event_overlap": 0.25,
+        "context_length": 0,
+        "rationale": "true image context 为空或缺少可抽取事件字段，系统不强行归因。"
+      },
+      "current_event": {
+        "source": "current_caption",
+        "raw_text": "A fire broke out in New York in 2024.",
+        "entities": [],
+        "locations": [
+          "new york"
+        ],
+        "times": [
+          "2024"
+        ],
+        "event_types": [
+          "disaster"
+        ],
+        "relations": []
+      },
+      "true_event": {
+        "source": "true_image_context",
+        "raw_text": "",
+        "entities": [],
+        "locations": [],
+        "times": [],
+        "event_types": [],
+        "relations": []
+      },
+      "field_nli": {
+        "entity": {
+          "field": "entity",
+          "label": "unknown",
+          "confidence": 0.5,
+          "current_values": [],
+          "true_values": [],
+          "score": 0.5,
+          "hypothesis": "当前 caption 声称未明确给出主体/实体。",
+          "evidence": "图片真实语境显示未明确给出主体/实体。",
+          "rationale": "两侧都没有抽取到主体/实体，不把缺失当作冲突。"
+        },
+        "location": {
+          "field": "location",
+          "label": "neutral",
+          "confidence": 0.55,
+          "current_values": [
+            "new york"
+          ],
+          "true_values": [],
+          "score": 0.25,
+          "hypothesis": "当前 caption 声称地点为：new york。",
+          "evidence": "图片真实语境显示未明确给出地点。",
+          "rationale": "只有一侧给出地点，当前证据不足以判定矛盾。"
+        },
+        "time": {
+          "field": "time",
+          "label": "neutral",
+          "confidence": 0.55,
+          "current_values": [
+            "2024"
+          ],
+          "true_values": [],
+          "score": 0.25,
+          "hypothesis": "当前 caption 声称时间为：2024。",
+          "evidence": "图片真实语境显示未明确给出时间。",
+          "rationale": "只有一侧给出时间，当前证据不足以判定矛盾。"
+        },
+        "event_type": {
+          "field": "event_type",
+          "label": "neutral",
+          "confidence": 0.55,
+          "current_values": [
+            "disaster"
+          ],
+          "true_values": [],
+          "score": 0.25,
+          "hypothesis": "当前 caption 声称事件类型为：disaster。",
+          "evidence": "图片真实语境显示未明确给出事件类型。",
+          "rationale": "只有一侧给出事件类型，当前证据不足以判定矛盾。"
+        },
+        "relation": {
+          "field": "relation",
+          "label": "unknown",
+          "confidence": 0.5,
+          "current_values": [],
+          "true_values": [],
+          "score": 0.5,
+          "hypothesis": "当前 caption 声称未明确给出动作/关系。",
+          "evidence": "图片真实语境显示未明确给出动作/关系。",
+          "rationale": "两侧都没有抽取到动作/关系，不把缺失当作冲突。"
+        }
+      },
+      "explanation": "图片真实语境证据不足或字段过少，系统不强行给出错配类型；建议补充 VisualNews 原始 caption/OCR/检索证据。",
+      "experiment_status": {
+        "system_demo": "completed",
+        "vdt_reproduction": "completed_core_two_domains",
+        "large_scale_attribution_eval": "pending_or_running",
+        "claim_boundary": "当前演示证明系统闭环；归因有效性需以人工 gold set 与 ablation 结果为准。"
+      }
+    }
+  },
+  {
+    "input": {
+      "sample_id": "route07_chinese_location",
+      "image_id": "demo_shanghai_cn",
+      "domain": "demo_cn",
+      "title": "中文地点错配：北京 claim vs 上海 true context",
+      "vdt_label": "OOC",
+      "vdt_score": 0.8,
+      "current_caption": "2024年，北京市举行抗议游行。",
+      "true_image_context": "2024年，上海市举行抗议游行。",
+      "gold_mismatch_type": "location mismatch",
+      "gold_conflict_fields": [
+        "location"
+      ],
+      "demo_point": "展示中文地点字段抽取与冲突展示。"
+    },
+    "actual": {
+      "sample_id": "route07_chinese_location",
+      "image_id": "demo_shanghai_cn",
+      "domain": "demo_cn",
+      "method_version": "vdt-cove-attr-system-demo-v1",
+      "technical_route": "VDT baseline + COVE-lite true context + evidence relevance + field-wise NLI attribution",
+      "classification_policy": "baseline_preserving_sidecar",
+      "current_caption": "2024年，北京市举行抗议游行。",
+      "true_image_context": "2024年，上海市举行抗议游行。",
+      "vdt": {
+        "label": "OOC",
+        "score": 0.8
+      },
+      "final_label": "OOC",
+      "decision_source": "vdt_baseline",
+      "classification_note": "主分类继承 VDT；COVE-Attr 只输出归因，不覆盖 final_label。",
+      "mismatch_type": "location mismatch",
+      "conflict_fields": [
+        "location"
+      ],
+      "evidence_relevance": {
+        "score": 0.5017,
+        "level": "medium",
+        "sufficient": true,
+        "token_overlap": 0.0,
+        "event_overlap": 0.8333,
+        "context_length": 1,
+        "rationale": "true context 提供部分相关证据，归因结果需要人工复核。"
+      },
+      "current_event": {
+        "source": "current_caption",
+        "raw_text": "2024年，北京市举行抗议游行。",
+        "entities": [],
+        "locations": [
+          "北京市"
+        ],
+        "times": [
+          "2024年"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "true_event": {
+        "source": "true_image_context",
+        "raw_text": "2024年，上海市举行抗议游行。",
+        "entities": [],
+        "locations": [
+          "上海市"
+        ],
+        "times": [
+          "2024年"
+        ],
+        "event_types": [
+          "protest"
+        ],
+        "relations": [
+          "gather"
+        ]
+      },
+      "field_nli": {
+        "entity": {
+          "field": "entity",
+          "label": "unknown",
+          "confidence": 0.5,
+          "current_values": [],
+          "true_values": [],
+          "score": 0.5,
+          "hypothesis": "当前 caption 声称未明确给出主体/实体。",
+          "evidence": "图片真实语境显示未明确给出主体/实体。",
+          "rationale": "两侧都没有抽取到主体/实体，不把缺失当作冲突。"
+        },
+        "location": {
+          "field": "location",
+          "label": "contradiction",
+          "confidence": 0.6667,
+          "current_values": [
+            "北京市"
+          ],
+          "true_values": [
+            "上海市"
+          ],
+          "score": 0.3333,
+          "hypothesis": "当前 caption 声称地点为：北京市。",
+          "evidence": "图片真实语境显示地点为：上海市。",
+          "rationale": "两侧地点明显不同，构成候选冲突字段。"
+        },
+        "time": {
+          "field": "time",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "2024年"
+          ],
+          "true_values": [
+            "2024年"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称时间为：2024年。",
+          "evidence": "图片真实语境显示时间为：2024年。",
+          "rationale": "两侧时间高度一致。"
+        },
+        "event_type": {
+          "field": "event_type",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "protest"
+          ],
+          "true_values": [
+            "protest"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称事件类型为：protest。",
+          "evidence": "图片真实语境显示事件类型为：protest。",
+          "rationale": "两侧事件类型高度一致。"
+        },
+        "relation": {
+          "field": "relation",
+          "label": "entailment",
+          "confidence": 1.0,
+          "current_values": [
+            "gather"
+          ],
+          "true_values": [
+            "gather"
+          ],
+          "score": 1.0,
+          "hypothesis": "当前 caption 声称动作/关系为：gather。",
+          "evidence": "图片真实语境显示动作/关系为：gather。",
+          "rationale": "两侧动作/关系高度一致。"
+        }
+      },
+      "explanation": "VDT 判断为 OOC；COVE-Attr 的主错配类型为 location mismatch。冲突字段：location: 当前=北京市；真实语境=上海市。证据相关性=medium(0.5017)。",
+      "experiment_status": {
+        "system_demo": "completed",
+        "vdt_reproduction": "completed_core_two_domains",
+        "large_scale_attribution_eval": "pending_or_running",
+        "claim_boundary": "当前演示证明系统闭环；归因有效性需以人工 gold set 与 ablation 结果为准。"
+      }
+    }
+  },
+  {
+    "input": {
+      "sample_id": "route08_multi_field",
+      "image_id": "demo_london_football",
+      "domain": "demo_hard_negative",
+      "title": "多字段 Hard Negative：fire New York vs football London 2019",
+      "vdt_label": "OOC",
+      "vdt_score": 0.94,
+      "current_caption": "A fire broke out in New York on Monday.",
+      "true_image_context": "A football match took place in London in 2019.",
+      "gold_mismatch_type": "location mismatch",
+      "gold_conflict_fields": [
+        "location",
+        "time",
+        "event_type"
+      ],
+      "demo_point": "展示 hard negative 下多个冲突字段同时输出。"
+    },
+    "actual": {
+      "sample_id": "route08_multi_field",
+      "image_id": "demo_london_football",
+      "domain": "demo_hard_negative",
+      "method_version": "vdt-cove-attr-system-demo-v1",
+      "technical_route": "VDT baseline + COVE-lite true context + evidence relevance + field-wise NLI attribution",
+      "classification_policy": "baseline_preserving_sidecar",
+      "current_caption": "A fire broke out in New York on Monday.",
+      "true_image_context": "A football match took place in London in 2019.",
+      "vdt": {
+        "label": "OOC",
+        "score": 0.94
+      },
+      "final_label": "OOC",
+      "decision_source": "vdt_baseline",
+      "classification_note": "主分类继承 VDT；COVE-Attr 只输出归因，不覆盖 final_label。",
+      "mismatch_type": "location mismatch",
+      "conflict_fields": [
+        "location",
+        "time",
+        "event_type"
+      ],
+      "evidence_relevance": {
+        "score": 0.3483,
+        "level": "medium",
+        "sufficient": true,
+        "token_overlap": 0.0,
+        "event_overlap": 0.1667,
+        "context_length": 9,
+        "rationale": "true context 提供部分相关证据，归因结果需要人工复核。"
+      },
+      "current_event": {
+        "source": "current_caption",
+        "raw_text": "A fire broke out in New York on Monday.",
+        "entities": [],
+        "locations": [
+          "new york"
+        ],
+        "times": [
+          "Monday"
+        ],
+        "event_types": [
+          "disaster"
+        ],
+        "relations": []
+      },
+      "true_event": {
+        "source": "true_image_context",
+        "raw_text": "A football match took place in London in 2019.",
+        "entities": [],
+        "locations": [
+          "london"
+        ],
+        "times": [
+          "2019"
+        ],
+        "event_types": [
+          "sports"
+        ],
+        "relations": []
+      },
+      "field_nli": {
+        "entity": {
+          "field": "entity",
+          "label": "unknown",
+          "confidence": 0.5,
+          "current_values": [],
+          "true_values": [],
+          "score": 0.5,
+          "hypothesis": "当前 caption 声称未明确给出主体/实体。",
+          "evidence": "图片真实语境显示未明确给出主体/实体。",
+          "rationale": "两侧都没有抽取到主体/实体，不把缺失当作冲突。"
+        },
+        "location": {
+          "field": "location",
+          "label": "contradiction",
+          "confidence": 0.7857,
+          "current_values": [
+            "new york"
+          ],
+          "true_values": [
+            "london"
+          ],
+          "score": 0.2143,
+          "hypothesis": "当前 caption 声称地点为：new york。",
+          "evidence": "图片真实语境显示地点为：london。",
+          "rationale": "两侧地点明显不同，构成候选冲突字段。"
+        },
+        "time": {
+          "field": "time",
+          "label": "contradiction",
+          "confidence": 1.0,
+          "current_values": [
+            "Monday"
+          ],
+          "true_values": [
+            "2019"
+          ],
+          "score": 0.0,
+          "hypothesis": "当前 caption 声称时间为：Monday。",
+          "evidence": "图片真实语境显示时间为：2019。",
+          "rationale": "两侧时间明显不同，构成候选冲突字段。"
+        },
+        "event_type": {
+          "field": "event_type",
+          "label": "contradiction",
+          "confidence": 0.7143,
+          "current_values": [
+            "disaster"
+          ],
+          "true_values": [
+            "sports"
+          ],
+          "score": 0.2857,
+          "hypothesis": "当前 caption 声称事件类型为：disaster。",
+          "evidence": "图片真实语境显示事件类型为：sports。",
+          "rationale": "两侧事件类型明显不同，构成候选冲突字段。"
+        },
+        "relation": {
+          "field": "relation",
+          "label": "unknown",
+          "confidence": 0.5,
+          "current_values": [],
+          "true_values": [],
+          "score": 0.5,
+          "hypothesis": "当前 caption 声称未明确给出动作/关系。",
+          "evidence": "图片真实语境显示未明确给出动作/关系。",
+          "rationale": "两侧都没有抽取到动作/关系，不把缺失当作冲突。"
+        }
+      },
+      "explanation": "VDT 判断为 OOC；COVE-Attr 的主错配类型为 location mismatch。冲突字段：location: 当前=new york；真实语境=london；time: 当前=Monday；真实语境=2019；event_type: 当前=disaster；真实语境=sports。证据相关性=medium(0.3483)。",
+      "experiment_status": {
+        "system_demo": "completed",
+        "vdt_reproduction": "completed_core_two_domains",
+        "large_scale_attribution_eval": "pending_or_running",
+        "claim_boundary": "当前演示证明系统闭环；归因有效性需以人工 gold set 与 ablation 结果为准。"
+      }
+    }
+  }
+]

@@ -18,8 +18,12 @@ REQUIRED_FILES = [
     ".github/workflows/ci.yml",
     "demo/app.py",
     "src/e3vdt/inference/pipeline.py",
+    "src/e3vdt/inference/cove_attr_pipeline.py",
+    "src/e3vdt/attribution/field_nli.py",
+    "src/e3vdt/attribution/evidence_relevance.py",
     "src/e3vdt/schemas.py",
     "scripts/check_project.py",
+    "scripts/run_cove_attr_demo_cases.py",
     "scripts/run_demo_cases.py",
     "scripts/check_accuracy_preserving.py",
     "scripts/export_demo_outputs.py",
@@ -28,6 +32,7 @@ REQUIRED_FILES = [
     "docs/FINAL_DELIVERABLES.md",
     "docs/DEFENSE_QA.md",
     "docs/PRESENTATION_RUNBOOK.md",
+    "docs/SYSTEM_DEMO_ACCEPTANCE.md",
     "docs/PROJECT_BRIEF.md",
     "docs/INNOVATION_POINTS.md",
     "docs/ACCURACY_PRESERVING_STRATEGY.md",
@@ -39,6 +44,8 @@ REQUIRED_FILES = [
     "docs/ppt/PPT_CONTENT_DRAFT.md",
     "docs/ppt/E3-VDT-OOC-答辩PPT初稿.pptx",
     "examples/demo_cases.jsonl",
+    "examples/cove_attr_demo_cases.jsonl",
+    "examples/cove_attr_demo_outputs.json",
     "examples/demo_outputs.json",
     "examples/reproduction_metrics.json",
 ]
@@ -124,6 +131,36 @@ def check_demo_cases(errors: list[str]) -> None:
         ok(f"demo case 数量充足：{len(rows)}")
 
 
+
+def check_cove_attr_demo_cases(errors: list[str]) -> None:
+    path = ROOT / "examples" / "cove_attr_demo_cases.jsonl"
+    rows = []
+    for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            fail(f"cove_attr_demo_cases.jsonl 第 {line_no} 行 JSON 解析失败：{exc}", errors)
+            continue
+        for key in ["sample_id", "current_caption", "true_image_context", "vdt_label", "gold_mismatch_type", "gold_conflict_fields"]:
+            if key not in row:
+                fail(f"COVE demo case {row.get('sample_id', line_no)} 缺少字段 {key}", errors)
+        rows.append(row)
+    if len(rows) < 6:
+        fail(f"COVE-Attr demo case 数量不足：{len(rows)} < 6", errors)
+    else:
+        ok(f"COVE-Attr demo case 数量充足：{len(rows)}")
+    out = ROOT / "examples" / "cove_attr_demo_outputs.json"
+    if out.exists():
+        data = json.loads(out.read_text(encoding="utf-8"))
+        summary = data.get("summary", {})
+        if summary.get("n", 0) < 6 or summary.get("conflict_field_micro_f1", 0.0) < 0.75:
+            fail("COVE-Attr demo outputs 自检指标过低或样例数不足", errors)
+        else:
+            ok("COVE-Attr demo outputs 自检通过")
+
+
 def check_metrics(errors: list[str]) -> None:
     path = ROOT / "examples/reproduction_metrics.json"
     rows = json.loads(path.read_text(encoding="utf-8"))
@@ -190,6 +227,7 @@ def main() -> int:
     check_office_file("docs/report/E3-VDT-OOC-结课报告初稿.docx", "word/document.xml", None, errors)
     check_office_file("docs/ppt/E3-VDT-OOC-答辩PPT初稿.pptx", "ppt/presentation.xml", 10, errors)
     check_demo_cases(errors)
+    check_cove_attr_demo_cases(errors)
     check_metrics(errors)
     check_accuracy_preserving_docs(errors)
     check_tracked_large_or_forbidden(errors)

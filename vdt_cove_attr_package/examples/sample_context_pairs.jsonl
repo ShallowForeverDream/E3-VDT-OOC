@@ -1,0 +1,2 @@
+{"sample_id":"s1","image_id":"img1","label":1,"current_caption":"Protesters march in Paris on Monday.","true_image_context":"Demonstrators gathered in London in 2019 during a climate protest.","domain":"demo"}
+{"sample_id":"s2","image_id":"img2","label":0,"current_caption":"A football team celebrates after winning the cup in London.","true_image_context":"A football team celebrates after winning the cup in London.","domain":"demo"}

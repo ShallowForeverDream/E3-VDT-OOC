@@ -42,3 +42,14 @@ wandb/
 *.tmp
 ~$*.docx
 ~$*.pptx
+
+# Local generated outputs and presentation scratch scripts
+outputs/
+scripts/build_super_pretty_deck.py
+scripts/make_pretty_deck_from_reference.py
+
+# Local/manual attribution annotation working files; commit only after human review
+examples/annotation_*.jsonl
+examples/annotation_*_中文.csv
+examples/attribution_eval_candidates.jsonl
+examples/attribution_eval_set.jsonl

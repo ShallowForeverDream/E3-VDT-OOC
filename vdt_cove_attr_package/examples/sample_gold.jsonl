@@ -1,0 +1,2 @@
+{"sample_id":"s1","gold_mismatch_type":"location mismatch","gold_conflict_fields":["location","time"],"annotation_status":"done","rationale":"Paris/Monday conflicts with London/2019."}
+{"sample_id":"s2","gold_mismatch_type":"benign illustrative image","gold_conflict_fields":[],"annotation_status":"done","rationale":"captions match."}

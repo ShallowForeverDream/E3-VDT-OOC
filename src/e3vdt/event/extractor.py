@@ -19,7 +19,7 @@ EVENT_KEYWORDS = {
 RELATION_KEYWORDS = {
     "gather": ["gather","rally","march","protest","聚集","游行","抗议"],
     "attack": ["attack","strike","bomb","hit","袭击","打击","轰炸"],
-    "meet": ["meet","talk","summit","visit","会见","访问","峰会"],
+    "meet": ["meet","met","talk","summit","visit","会见","访问","峰会"],
     "arrest": ["arrest","detain","charge","逮捕","拘留","起诉"],
     "rescue": ["rescue","evacuate","救援","撤离"],
     "win": ["win","beat","defeat","获胜","击败"],

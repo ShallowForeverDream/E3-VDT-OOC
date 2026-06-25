@@ -55,32 +55,33 @@ http://127.0.0.1:7860
 ### 3.1 PPT 主线
 
 1. 第 1-4 页：问题背景、任务定义、baseline 局限。
-2. 第 5-8 页：VDT baseline、E3-VDT 框架、accuracy-preserving 策略、事件字段。
-3. 第 9-10 页：弱监督错配类型和 JSON schema。
-4. 切到网页 demo。
-5. 第 12-15 页：复现指标、对比、运行方式、总结。
+2. 第 5-8 页：VDT baseline 与 COVE-lite true-context attribution。
+3. 第 9-10 页：Evidence relevance、field-wise NLI、人工 attribution 评测协议。
+4. 切到网页 demo，优先展示 `VDT-COVE-Attr 主系统`。
+5. 后续页面：复现指标、实验计划、边界与下一步。
 
 ### 3.2 网页 demo 主线
 
-在 `OOC 检测演示` 标签页依次点击样例：
+先看首页 dashboard：说明系统由 VDT 主分类、COVE-lite 真实语境、evidence relevance、field-wise NLI attribution 组成。
 
-1. `ex01_non_ooc_same_event`：正常 Non-OOC。
-2. `ex02_location_mismatch`：地点错配。
-3. `ex04_entity_mismatch`：主体错配。
-4. `ex07_multi_field_hard_negative`：多字段 hard negative。
-5. `ex08_uncertain_no_image_context`：证据不足时不硬判。
+在 `VDT-COVE-Attr 主系统` 标签页依次展示：
+
+1. `route01_location_time`：Paris claim vs London/2019 true context，展示 location + time conflict。
+2. `route03_entity`：Obama claim vs Musk true context，展示 entity conflict。
+3. `route06_evidence_insufficient`：true context 为空，展示 evidence sufficiency gate 不强行解释。
+4. `route08_multi_field`：多字段 hard negative，展示 location/time/event_type 同时冲突。
 
 然后切到 `分类不降验证`：
 
-- 保持默认文本和图像上下文。
-- `VDT baseline label` 选 `Non-OOC`。
+- `VDT baseline label` 故意选 `Non-OOC`。
 - 点击“验证 sidecar 不覆盖主分类”。
-- 讲解：事件模块发现 `location mismatch`，但最终 `label` 仍继承 `baseline_label`，所以不会降低 VDT 主分类准确率。
+- 讲解：归因模块可以发现字段冲突，但最终 `label` 仍继承 VDT baseline，因此不降低 VDT 主分类准确率。
 
-最后切到 `复现实验指标`：
+最后切到 `复现实验指标` 和 `实验看板`：
 
 - 说明 `bbc,guardian` 已完成 strict baseline：F1=0.7353，Acc=0.7383，AUC=0.7398。
 - 说明 `usa_today,washington_post` bs64 已完成：F1=0.8032，Acc=0.8032，AUC=0.8028；bs128 OOM 作为硬件约束记录。
+- 说明归因大规模实验脚本已准备，答辩后按人工 gold set + ablation 补最终实验表。
 
 ## 4. 备用方案
 
@@ -155,6 +156,7 @@ python scripts/check_accuracy_preserving.py
 
 ```powershell
 python scripts/check_project.py
+python scripts/run_cove_attr_demo_cases.py
 python scripts/run_demo_cases.py
 python scripts/check_accuracy_preserving.py
 python scripts/check_final_deliverables.py
@@ -172,4 +174,4 @@ outputs/submission/
 
 - 不声称完整复现论文全部设置；当前已完成两组 core strict setting baseline，并记录 bs128/OOM 等硬件约束。
 - 91GB 原图、BLIP-2 权重、VDT checkpoint 不提交 GitHub，只记录路径和日志。
-- 当前 demo 的事件抽取是轻量 heuristic，用于展示输出 schema 和错配归因；正式论文方法的主分类指标来自 VDT baseline。
+- 当前可验收系统已完成 VDT-COVE-Attr 演示闭环；大规模归因有效性仍需人工 gold set 和 ablation 支撑，不能把 curated demo 指标当最终论文实验。
