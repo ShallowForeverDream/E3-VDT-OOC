@@ -14,20 +14,20 @@
 
 推荐回答：
 
-> 我们完成了 VDT strict BLIP-2/GaussianBlur 核心设置的一组完整 baseline 复现，并正在补充第二组跨域设置。由于本机 RTX 4060 Laptop GPU 显存有限，官方 batch size 256 跑不通，我们记录了 CUBLAS/OOM 问题并将 batch size 调整到 128/64。因此我们不会夸大为“完整复现论文全部实验设置”，而是准确表述为“完成核心 strict setting baseline，并记录硬件约束下的复现偏差”。
+> 我们完成了 VDT strict BLIP-2/GaussianBlur 核心设置下两组跨域 baseline 复现。由于本机 RTX 4060 Laptop GPU 显存有限，官方 batch size 256 跑不通，`usa_today,washington_post` 的 bs128 也出现 CUDA OOM，因此我们记录了 CUBLAS/OOM 问题并将 batch size 调整到 128/64。因此我们不会夸大为“完整复现论文全部实验设置”，而是准确表述为“完成核心 strict setting baseline，并记录硬件约束下的复现偏差”。
 
 可汇报数据：
 
 | 设置 | 状态 | F1 | Acc | AUC |
 |---|---|---:|---:|---:|
 | `bbc,guardian`, bs128 | completed | 0.7353 | 0.7383 | 0.7398 |
-| `usa_today,washington_post`, bs64 | running_partial | 0.8013 | 0.8017 | 0.8006 |
+| `usa_today,washington_post`, bs64 | completed | 0.8032 | 0.8032 | 0.8028 |
 
 不要说：
 
 - “我们完整复现了论文所有指标。”
 - “我们已经超过论文结果。”
-- “bs64 running_partial 是最终结果。”
+- “把历史 running_partial 当成最终结果。”
 
 ## 3. 老师可能问：你们的创新点是什么？
 
@@ -136,10 +136,10 @@ python scripts/export_demo_outputs.py
 
 推荐回答：
 
-1. 第二组 domain 复现仍在运行，最终指标要等训练结束后更新。
-2. 当前 demo 的事件抽取是轻量 heuristic，需要后续接入更强 NER/OCR/captioning。
-3. 弱监督错配标签还需要人工抽样校验。
-4. 若做真正的 attribution head，需要更多标注或更系统的弱标签评测。
+1. 当前 demo 的事件抽取是轻量 heuristic，需要后续接入更强 NER/OCR/captioning。
+2. 弱监督错配标签还需要人工抽样校验。
+3. 若做真正的 attribution head，需要更多标注或更系统的弱标签评测。
+4. 受限于本机 GPU，复现实验没有覆盖论文全部 domain/超参数组合。
 
 ## 12. 老师可能问：每个人怎么分工？
 

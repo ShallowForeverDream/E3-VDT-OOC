@@ -138,9 +138,9 @@ F1(E3-VDT) >= F1(VDT)
 | 设置 | F1 | Acc | AUC | 状态 |
 |---|---:|---:|---:|---|
 | bbc,guardian bs128 | 0.7353 | 0.7383 | 0.7398 | completed |
-| usa_today,washington_post bs64 | 0.8013 | 0.8017 | 0.8006 | running / partial |
+| usa_today,washington_post bs64 | 0.8032 | 0.8032 | 0.8028 | completed |
 
-讲稿：第二组是运行中当前最优，最终结果需要训练结束后更新。
+讲稿：两组结果均为训练结束后解析日志得到的 best-by-F1；usa_today,washington_post 的 bs128 因显存限制 OOM，因此最终采用 bs64 作为本机可复现设置。
 
 ## 13. E3-VDT 与 VDT 对比
 

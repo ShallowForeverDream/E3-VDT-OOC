@@ -33,9 +33,9 @@ cd D:\MY_PROJECT\OOC\ooc_repro_baselines\external\VDT
 D:\0tools\conda-envs\vdt_py38\python.exe -m trainers.train_VDT --batch_size 64 --max_epochs 20 --target_domain usa_today,washington_post --base_model blip-2 --loss_type simclr
 ```
 
-- 状态：running
-- 启动时间：2026-06-24 20:20 Asia/Shanghai
-- PID：`66608`
+- 状态：completed
+- 启动时间：2026-06-24 overnight rerun Asia/Shanghai
+- 完成时间：2026-06-25 01:31:52 Asia/Shanghai
 - 处理：设置 `PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128`，降低 batch size 到 64。
 
 ## 已确认加载信息
@@ -50,8 +50,8 @@ source validation dataset size: 59163, target validation dataset size: 42931
 ## 当前日志路径
 
 ```text
-D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs64_20ep_usa_today_washington_post\train_stdout.log
-D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs64_20ep_usa_today_washington_post\train_stderr.log
+D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs64_20ep_usa_today_washington_post_bs64_ep20\train_stdout.log
+D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs64_20ep_usa_today_washington_post_bs64_ep20\train_stderr.log
 ```
 
 ## 监控
@@ -61,18 +61,22 @@ D:\MY_PROJECT\OOC\datasets\check_vdt_blip2_strict_training_usa_wp.ps1
 ```
 
 
-## 当前阶段性指标（running）
+## 最终指标（completed）
 
-截至当前训练仍在运行，已解析出 7 个 validation blocks。当前 best-by-F1：
+训练已完成，已解析出 13 个 validation blocks。best-by-F1 来自第 9 个 validation block：
 
 | F1 | Acc | AUC | F1-real | F1-fake | confusion matrix |
 |---:|---:|---:|---:|---:|---|
-| 0.8013 | 0.8017 | 0.8006 | 0.7884 | 0.8134 | `[[15861,5031],[3481,18558]]` |
+| 0.8032 | 0.8032 | 0.8028 | 0.7955 | 0.8104 | `[[16433,4459],[3988,18051]]` |
 
-说明：该结果为 running partial，最终报告应在训练进程结束后再次运行 `scripts/parse_vdt_log.py` 并更新 final 指标。
+本地 checkpoint 已归档：
 
-## 待补充
+```text
+D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\VDTNews_usa_today_washington_post_bs64_ep20.pt
+```
 
-- bs64 完成后的 best checkpoint epoch。
-- F1 / Acc / AUC / EER / confusion matrix。
-- 本地 checkpoint 归档路径。
+解析输出：
+
+```text
+D:\MY_PROJECT\OOC\ooc_repro_baselines\results\vdt_blip2_strict\official_bs64_20ep_usa_today_washington_post_bs64_ep20\parsed_metrics.json
+```

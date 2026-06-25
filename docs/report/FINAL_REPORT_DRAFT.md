@@ -6,7 +6,7 @@
 
 跨域图文内容挪用（Out-of-Context, OOC）是指真实图像被放入错误新闻语境中传播，造成误导性叙事。相比传统篡改检测，OOC 内容通常不修改图像像素，而是通过文本、时间、地点或事件语境错配制造虚假信息，因此更难依靠低层视觉伪造痕迹发现。
 
-本项目围绕新闻场景下的图文内容挪用检测，首先在 NewsCLIPpings / VisualNews 数据上复现 VDT baseline，并完成 strict BLIP-2/GaussianBlur 设置下的特征预处理和跨域训练。在 `target_domain=bbc,guardian` 设置下，当前复现得到 `F1=0.7353`、`Acc=0.7383`、`AUC=0.7398`。在此基础上，我们提出 E3-VDT（Event-grounded and Explanation-enhanced VDT）系统路线：在不降低 VDT 主分类准确率的前提下，以 sidecar 方式增加事件字段一致性建模，输出 `mismatch_type`、`conflict_fields`、`event_scores` 和结构化解释，使系统不仅判断“是否错配”，还能回答“哪里错、为什么错、属于哪类错配”。
+本项目围绕新闻场景下的图文内容挪用检测，首先在 NewsCLIPpings / VisualNews 数据上复现 VDT baseline，并完成 strict BLIP-2/GaussianBlur 设置下的特征预处理和跨域训练。在 `target_domain=bbc,guardian` 设置下，复现得到 `F1=0.7353`、`Acc=0.7383`、`AUC=0.7398`；在 `target_domain=usa_today,washington_post` 且 batch size 降为 64 的设置下，复现得到 `F1=0.8032`、`Acc=0.8032`、`AUC=0.8028`。在此基础上，我们提出 E3-VDT（Event-grounded and Explanation-enhanced VDT）系统路线：在不降低 VDT 主分类准确率的前提下，以 sidecar 方式增加事件字段一致性建模，输出 `mismatch_type`、`conflict_fields`、`event_scores` 和结构化解释，使系统不仅判断“是否错配”，还能回答“哪里错、为什么错、属于哪类错配”。
 
 实验与系统实现表明，VDT 可以作为有效二分类 baseline，而 E3-VDT 的主要贡献在于提升内容安全审核场景中的可解释性、可诊断性和演示可用性。项目最终提供可运行 Gradio 展示系统、统一 JSON 输出 schema、复现实验日志和答辩样例。
 
@@ -127,9 +127,9 @@ C_event = [s_entity, s_location, s_time, s_event_type, s_relation]
 |---|---|---:|---:|---:|---|
 | `target_domain=bbc,guardian`, bs128 | completed | 0.7353 | 0.7383 | 0.7398 | bs256 CUBLAS 失败，bs128 跑通 |
 | `target_domain=usa_today,washington_post`, bs128 | failed_oom | - | - | - | Epoch 1 中途 CUDA OOM |
-| `target_domain=usa_today,washington_post`, bs64 | running / partial | 0.8013 | 0.8017 | 0.8006 | 当前已跑出 7 个 validation blocks，最终结果待训练结束确认 |
+| `target_domain=usa_today,washington_post`, bs64 | completed | 0.8032 | 0.8032 | 0.8028 | 已完成 13 个 validation blocks，best-by-F1 来自第 9 个 validation block |
 
-说明：第二组 bs64 当前为运行中结果，最终报告需以训练结束后的 best-by-F1 解析结果为准。
+说明：两组 completed 结果均来自训练结束后 `train_stdout.log` 的 best-by-F1 解析；bs128 OOM 记录为本机硬件约束下的复现偏差。
 
 ## 4.3 E3-VDT 与 baseline 对比方式
 
@@ -176,7 +176,7 @@ C_event = [s_entity, s_location, s_time, s_event_type, s_relation]
 
 ## 6. 结果讨论
 
-当前 VDT baseline 已经在一组 domain 上完成严格流程复现，证明本项目不是仅做界面展示，而是完成了真实数据、特征预处理和模型训练。E3-VDT 的创新点主要体现在：
+当前 VDT baseline 已经在两组 domain 设置上完成 strict BLIP-2/GaussianBlur 流程复现，证明本项目不是仅做界面展示，而是完成了真实数据、特征预处理和模型训练。E3-VDT 的创新点主要体现在：
 
 1. 不降低分类准确率：默认沿用 VDT 主分类；
 2. 提供错配类型：从二分类扩展到细粒度归因；
@@ -186,7 +186,7 @@ C_event = [s_entity, s_location, s_time, s_event_type, s_relation]
 ## 7. 不足与未来工作
 
 1. 当前展示系统中的事件抽取仍是轻量规则/heuristic，需要后续接入更强 NER、OCR、captioning 或多模态大模型；
-2. 第二组 domain 复现仍在运行，最终报告需补充完整指标；
+2. 受限于本机 GPU，复现实验没有覆盖论文全部 domain/超参数组合；
 3. 弱监督错配标签需要更多人工抽样校验；
 4. 若尝试 event score 与 VDT score 融合，必须通过验证集 gate，确保分类指标不下降。
 

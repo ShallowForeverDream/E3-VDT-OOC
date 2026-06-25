@@ -6,7 +6,7 @@
     "target_domain_arg": "bbc,guardian",
     "status": "completed",
     "command": "python -m trainers.train_VDT --batch_size 128 --max_epochs 20 --target_domain bbc,guardian --base_model blip-2 --loss_type simclr",
-    "note": "Official batch_size=256 triggered CUDA CUBLAS on RTX 4060 Laptop; bs128 completed. Full log parsing shows best F1 at the first validation block; saved checkpoint epoch=1.",
+    "note": "Overnight official bs128/20ep run completed; parser reads UTF-16 PowerShell logs. Best by F1 is validation block 1 of 5.",
     "dataset_sizes": {
       "source_train": 409920,
       "source_validation": 42931,
@@ -14,8 +14,7 @@
       "target_validation": 81237
     },
     "best_checkpoint": {
-      "epoch": 1,
-      "local_path": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/official_bs128_20ep_bbc_guardian/VDTNews_blip2_strict_bbc_guardian_bs128_best_epoch1.pt"
+      "local_path": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/VDTNews_bbc_guardian_bs128_ep20.pt"
     },
     "metrics": {
       "accuracy_at_eer": 0.3402390536331967,
@@ -36,7 +35,11 @@
           33997
         ]
       ]
-    }
+    },
+    "started_at": "2026-06-24 overnight rerun Asia/Shanghai",
+    "completed_at": "2026-06-25 00:27:34 Asia/Shanghai",
+    "run_dir": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/official_bs128_20ep_bbc_guardian_bs128_ep20",
+    "num_validation_blocks": 5
   },
   {
     "id": "vdt_blip2_strict_usa_today_washington_post_bs128",
@@ -62,37 +65,42 @@
     "method": "VDT baseline",
     "feature_setting": "BLIP-2 / GaussianBlur strict",
     "target_domain_arg": "usa_today,washington_post",
-    "status": "running_partial",
-    "started_at": "2026-06-24 20:20 Asia/Shanghai",
-    "pid": 66608,
+    "status": "completed",
+    "started_at": "2026-06-24 overnight rerun Asia/Shanghai",
+    "pid": null,
     "command": "python -m trainers.train_VDT --batch_size 64 --max_epochs 20 --target_domain usa_today,washington_post --base_model blip-2 --loss_type simclr",
-    "note": "Running; current best parsed from 7 validation blocks so far. Final metrics will be updated after training exits.",
+    "note": "Overnight official bs64/20ep run completed; parser reads UTF-16 PowerShell logs. Best by F1 is validation block 9 of 13.",
     "dataset_sizes": {
       "source_train": 567012,
       "source_validation": 59163,
       "target_train": 409920,
       "target_validation": 42931
     },
-    "run_dir": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/official_bs64_20ep_usa_today_washington_post",
+    "run_dir": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/official_bs64_20ep_usa_today_washington_post_bs64_ep20",
     "metrics": {
-      "accuracy_at_eer": 0.4595280799422329,
-      "eer": 0.5404939689833429,
-      "threshold_at_eer": -3.2920475006103516,
-      "auc": 0.8006214226678052,
-      "f1": 0.8012768643082937,
-      "acc": 0.8017283548018914,
-      "f1_real": 0.7884376398071283,
-      "f1_fake": 0.8134478828789341,
+      "accuracy_at_eer": 0.4396356944865016,
+      "eer": 0.5603580317825004,
+      "threshold_at_eer": -3.015298366546631,
+      "auc": 0.8028085364085356,
+      "f1": 0.8031609406474612,
+      "acc": 0.8032424122429014,
+      "f1_real": 0.7955365139302399,
+      "f1_fake": 0.8103885609104581,
       "confusion_matrix": [
         [
-          15861,
-          5031
+          16433,
+          4459
         ],
         [
-          3481,
-          18558
+          3988,
+          18051
         ]
       ]
-    }
+    },
+    "completed_at": "2026-06-25 01:31:52 Asia/Shanghai",
+    "best_checkpoint": {
+      "local_path": "D:/MY_PROJECT/OOC/ooc_repro_baselines/results/vdt_blip2_strict/VDTNews_usa_today_washington_post_bs64_ep20.pt"
+    },
+    "num_validation_blocks": 13
   }
 ]

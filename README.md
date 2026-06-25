@@ -112,13 +112,13 @@ python -m e3vdt.inference.cli \
 
 ## 当前复现状态
 
-当前组长机器上已完成一组 VDT strict BLIP-2/GaussianBlur baseline，并已启动第二组 domain 复现：
+当前组长机器上已完成两组 VDT strict BLIP-2/GaussianBlur baseline；另保留一组 bs128 OOM 失败尝试作为硬件约束记录：
 
 | 实验 | 状态 | F1 | Acc | AUC |
 |---|---|---:|---:|---:|
 | `bbc,guardian` | completed | 0.7353 | 0.7383 | 0.7398 |
 | `usa_today,washington_post`, bs128 | failed: CUDA OOM | - | - | - |
-| `usa_today,washington_post`, bs64 | running_partial | 0.8013 | 0.8017 | 0.8006 |
+| `usa_today,washington_post`, bs64 | completed | 0.8032 | 0.8032 | 0.8028 |
 
 详细路径、日志和复现协议见 [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md) 与 [`docs/REPRODUCTION_PROTOCOL.md`](docs/REPRODUCTION_PROTOCOL.md)。网页 demo 的“复现实验指标”标签页也会展示这些结果。
 

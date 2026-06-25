@@ -79,8 +79,8 @@ http://127.0.0.1:7860
 
 最后切到 `复现实验指标`：
 
-- 说明 `bbc,guardian` 已完成 strict baseline。
-- 说明 `usa_today,washington_post` 是 running_partial，最终指标以训练结束后日志为准。
+- 说明 `bbc,guardian` 已完成 strict baseline：F1=0.7353，Acc=0.7383，AUC=0.7398。
+- 说明 `usa_today,washington_post` bs64 已完成：F1=0.8032，Acc=0.8032，AUC=0.8028；bs128 OOM 作为硬件约束记录。
 
 ## 4. 备用方案
 
@@ -170,6 +170,6 @@ outputs/submission/
 
 ## 6. 当前需要诚实说明的边界
 
-- 不声称完整复现论文全部设置；当前已完成 core strict setting baseline，并补跑第二组 domain。
+- 不声称完整复现论文全部设置；当前已完成两组 core strict setting baseline，并记录 bs128/OOM 等硬件约束。
 - 91GB 原图、BLIP-2 权重、VDT checkpoint 不提交 GitHub，只记录路径和日志。
 - 当前 demo 的事件抽取是轻量 heuristic，用于展示输出 schema 和错配归因；正式论文方法的主分类指标来自 VDT baseline。

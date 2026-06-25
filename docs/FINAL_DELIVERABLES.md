@@ -80,11 +80,11 @@ docs/DEFENSE_QA.md
 |---|---|---:|---:|---:|
 | `bbc,guardian`, bs128 | completed | 0.7353 | 0.7383 | 0.7398 |
 | `usa_today,washington_post`, bs128 | failed_oom | - | - | - |
-| `usa_today,washington_post`, bs64 | running_partial | 0.8013 | 0.8017 | 0.8006 |
+| `usa_today,washington_post`, bs64 | completed | 0.8032 | 0.8032 | 0.8028 |
 
 不要夸大为“完整复现论文全部设置”。准确表述是：
 
-> 已完成 VDT strict BLIP-2/GaussianBlur 核心设置的一组完整 baseline，并正在补充第二组跨域设置；项目创新部分采用 accuracy-preserving sidecar，在不降低分类 Accuracy/F1 的前提下增强错配归因。
+> 已完成 VDT strict BLIP-2/GaussianBlur 核心设置下两组跨域 baseline；项目创新部分采用 accuracy-preserving sidecar，在不降低分类 Accuracy/F1 的前提下增强错配归因。
 
 ## 4. 创新点与验收口径
 
@@ -135,6 +135,5 @@ final deliverable check passed.
 ## 6. 答辩前仍需人工确认
 
 - 把组员真实姓名、学号、分工填到学校要求的封面/文档中。
-- 第二组 VDT 训练结束后，重新解析日志并更新 `examples/reproduction_metrics.json`。
 - 如果教师要求提交 PDF，需要将 DOCX/PPTX 另存为 PDF 后再检查版式。
 - 如需在课堂机运行，提前安装依赖并测试端口是否可用。
