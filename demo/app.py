@@ -374,7 +374,7 @@ def build_app():
         gr.Markdown(render_system_dashboard())
         with gr.Tabs():
             with gr.Tab("VDT-CF-Attr 无 true context"):
-                gr.Markdown("## 最终应用路线：只输入 image + current caption\n该页不提供 `true_image_context`，也不要求手填 `VDT label / score`。系统会先自动调用 `VDTAdapter` 得到 OOC/Non-OOC，再进入 no-true-context attribution head。若本地存在 `outputs/no_true_context_attr/no_true_context_attr_head.pkl`，会加载 attribution head，否则回退到 field-prompt grounding rule。")
+                gr.Markdown("## 最终应用路线：只输入 image + current caption\n该页不提供 `true_image_context`，也不要求手填 `VDT label / score`。系统会先自动调用 `VDTAdapter` 得到 OOC/Non-OOC，再进入 no-true-context attribution head。若本地存在 `outputs/no_true_context_attr/no_true_context_attr_head.pkl`，会加载 attribution head，否则回退到 field-prompt grounding rule。首次运行需要加载 CLIP/transformers 权重，等待几十秒是正常现象；后续同一进程会复用缓存。")
                 with gr.Row():
                     with gr.Column(scale=1):
                         ntc_image = gr.Image(label="新闻图片 / Image", type="filepath")
@@ -382,7 +382,7 @@ def build_app():
                         ntc_btn = gr.Button("运行 VDT-CF-Attr", variant="primary")
                     with gr.Column(scale=1):
                         ntc_summary = gr.Markdown()
-                        ntc_label = gr.Label(label="No-true-context attribution summary")
+                        ntc_label = gr.JSON(label="No-true-context attribution summary")
                         ntc_sims = gr.Dataframe(headers=["字段", "CLIP prompt similarity", "caption 中是否出现"], label="字段级 prompt grounding 特征", wrap=True)
                         ntc_raw = gr.Code(label="完整 JSON 输出", language="json")
                 ntc_btn.click(run_no_true_context_attr, inputs=[ntc_image, ntc_caption], outputs=[ntc_summary, ntc_label, ntc_sims, ntc_raw])
@@ -402,7 +402,7 @@ def build_app():
                         run_btn = gr.Button("运行 VDT-COVE-Attr", variant="primary")
                     with gr.Column(scale=1):
                         summary = gr.Markdown()
-                        evidence = gr.Label(label="Evidence relevance / sufficiency")
+                        evidence = gr.JSON(label="Evidence relevance / sufficiency")
                         event_table = gr.Dataframe(headers=["字段", "current caption", "true image context"], label="事件字段抽取对比", wrap=True)
                         nli_table = gr.Dataframe(headers=["字段", "NLI标签", "当前值", "真实语境值", "置信度", "解释"], label="Field-wise NLI / 字段矛盾判断", wrap=True)
                         raw = gr.Code(label="完整系统 JSON", language="json")
