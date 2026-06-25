@@ -1,7 +1,7 @@
 param(
   [string]$ProjectRoot = "D:\MY_PROJECT\OOC\E3-VDT-OOC",
   [string]$NewsClippingsDataDir = "D:\MY_PROJECT\OOC\datasets\NewsCLIPpings_repo\news_clippings\data",
-  [string]$VisualNewsMetadataDir = "E:\OOC_Datasets\VisualNews\metadata",
+  [string]$VisualNewsMetadataDir = "E:\OOC_Datasets\VisualNews\articles_metadata",
   [string]$Python = "python",
   [int]$MaxRecords = 0,
   [int]$EvalSampleN = 120
