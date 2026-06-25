@@ -15,15 +15,32 @@ Set-Location $ProjectRoot
 New-Item -ItemType Directory -Force outputs | Out-Null
 New-Item -ItemType Directory -Force examples | Out-Null
 
+# Remove stale files from previous failed runs, but never delete manual gold annotations.
+$stale = @(
+  "outputs\cove_lite_context_pairs.jsonl",
+  "outputs\cove_lite_context_pairs.jsonl.stats.json",
+  "outputs\weak_attribution_labels.jsonl",
+  "outputs\weak_attribution_labels.jsonl.stats.json",
+  "outputs\event_tuples_v2.jsonl",
+  "outputs\event_tuples_v2.jsonl.stats.json",
+  "outputs\field_nli_attribution_v2.jsonl",
+  "outputs\field_nli_attribution_v2.jsonl.stats.json",
+  "examples\attribution_eval_candidates.jsonl",
+  "outputs\report_tables_v2.md"
+)
+foreach ($f in $stale) {
+  if (Test-Path $f) { Remove-Item $f -Force }
+}
+
 Write-Host "[0/7] input check"
 & $Python scripts\diagnose_cove_lite_inputs.py `
-  --newsclippings-dir $NewsClippingsDataDir `
+  --newsclippings-data-dir $NewsClippingsDataDir `
   --visualnews-metadata-dir $VisualNewsMetadataDir `
   --output outputs\input_check.json
 
 Write-Host "[1/7] COVE-lite true context pairs"
 & $Python scripts\context\build_cove_lite_context_pairs.py `
-  --newsclippings-dir $NewsClippingsDataDir `
+  --newsclippings-data-dir $NewsClippingsDataDir `
   --visualnews-metadata-dir $VisualNewsMetadataDir `
   --output outputs\cove_lite_context_pairs.jsonl `
   --max-records $MaxRecords
@@ -52,18 +69,19 @@ if ($NoTransformers) { $nliArgs += "--no-transformers" }
 
 Write-Host "[5/7] build manual annotation candidates"
 & $Python scripts\eval\build_attribution_eval_sample.py `
-  --input outputs\field_nli_attribution_v2.jsonl `
+  --context-pairs outputs\cove_lite_context_pairs.jsonl `
+  --weak-labels outputs\field_nli_attribution_v2.jsonl `
   --output examples\attribution_eval_candidates.jsonl `
-  --sample-n $EvalSampleN
+  --n $EvalSampleN
 
-Write-Host "[6/7] evaluate if gold set exists"
-if (Test-Path examples\attribution_eval_set.jsonl) {
+Write-Host "[6/7] evaluate if gold set exists and predictions are non-empty"
+if ((Test-Path examples\attribution_eval_set.jsonl) -and (Test-Path outputs\field_nli_attribution_v2.jsonl) -and ((Get-Item outputs\field_nli_attribution_v2.jsonl).Length -gt 0)) {
   & $Python scripts\eval\evaluate_attribution_v2.py `
     --gold examples\attribution_eval_set.jsonl `
     --pred outputs\field_nli_attribution_v2.jsonl `
     --output outputs\attribution_eval_v2_metrics.json
 } else {
-  Write-Host "Gold file missing: examples\attribution_eval_set.jsonl"
+  Write-Host "Gold file missing or predictions empty."
   Write-Host "Copy examples\attribution_eval_candidates.jsonl to examples\attribution_eval_set.jsonl and fill gold_mismatch_type / gold_conflict_fields."
 }
 
