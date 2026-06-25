@@ -62,6 +62,32 @@ Windows 答辩现场一键启动：
 .\scripts\start_demo.ps1
 ```
 
+### 队友只跑演示的最小要求
+
+队友如果只是打开网页演示，**不需要**：
+
+```text
+configs/paths.local.yaml
+VisualNews 原图 / origin.tar
+NewsCLIPpings 原始数据
+VDT/BLIP-2 checkpoint
+```
+
+这些只用于重新跑完整实验/训练/严格复现。演示推荐使用组长导出的轻量 artifact：
+
+```powershell
+# 组长本机
+powershell -ExecutionPolicy Bypass -File .\scripts\export_demo_artifact.ps1
+
+# 队友仓库根目录
+git pull origin main
+powershell -ExecutionPolicy Bypass -File .\scripts\import_demo_artifact.ps1 `
+  -ZipPath D:\path\to\e3-vdt-ooc-demo-artifact.zip
+powershell -ExecutionPolicy Bypass -File .\scripts\start_demo.ps1 -SkipChecks
+```
+
+详见：[`docs/TEAMMATE_REPRODUCTION.md`](docs/TEAMMATE_REPRODUCTION.md)。
+
 ## 运行 COVE-lite 归因实验
 
 本实验需要本机已有 NewsCLIPpings JSON 和 VisualNews metadata。
@@ -280,7 +306,7 @@ python scripts\collect_v2_report_tables.py --output outputs\report_tables_v2.md
 
 ## 大文件约定
 
-不要提交 VisualNews 原图、`origin.tar`、BLIP-2 权重、VDT checkpoint、`.pt/.npy/.pkl/.ckpt`。本地路径复制 `configs/paths.example.yaml` 为 `configs/paths.local.yaml` 后自行修改。
+不要提交 VisualNews 原图、`origin.tar`、BLIP-2 权重、VDT checkpoint、`.pt/.npy/.pkl/.ckpt`。`configs/paths.local.yaml` 只在重新跑完整实验时需要，本地路径复制 `configs/paths.example.yaml` 后自行修改；**只跑网页演示不需要这个文件**。
 
 ## 最稳答辩口径
 
