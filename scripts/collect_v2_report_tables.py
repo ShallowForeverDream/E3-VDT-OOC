@@ -65,6 +65,30 @@ def main() -> None:
     else:
         rows.append("| majority/random/rule/NLI | 待人工标注 | 待测 | 待测 | 待测 | 待测 |\n\n")
 
+    cf = read_json("outputs/counterfactual/counterfactual_generation_stats.json")
+    rows.append("## Table 6. Controlled counterfactual attribution data\n")
+    rows.append("| Edit type | Generated/kept | Attempts | Keep rate |\n|---|---:|---:|---:|\n")
+    if cf:
+        kept = cf.get("kept", {})
+        attempted = cf.get("attempted", {})
+        rates = cf.get("keep_rate", {})
+        rows.append(f"| none / positive | {kept.get('none', 0)} | {kept.get('none', 0)} | 1.0000 |\n")
+        for edit in ["location_swap", "time_swap", "entity_swap"]:
+            rows.append(f"| {edit} | {kept.get(edit, 0)} | {attempted.get(edit, 0)} | {float(rates.get(edit, 0.0)):.4f} |\n")
+        rows.append("\n")
+    else:
+        rows.append("| none/location/time/entity | 待跑 | 待跑 | 待跑 |\n\n")
+
+    head = read_json("outputs/counterfactual/attribution_head_metrics.json")
+    rows.append("## Table 7. Attribution head on controlled counterfactual test set\n")
+    rows.append("| Method | N | Type Acc | Field Micro-F1 | Field Macro-F1 | Exact Match |\n|---|---:|---:|---:|---:|---:|\n")
+    if head:
+        for name, res in head.get("results", {}).items():
+            rows.append(f"| {name} | {res.get('n', 0)} | {res.get('mismatch_type_accuracy', 0):.4f} | {res.get('conflict_field_micro_f1', 0):.4f} | {res.get('conflict_field_macro_f1', 0):.4f} | {res.get('exact_match_rate', 0):.4f} |\n")
+        rows.append("\n")
+    else:
+        rows.append("| majority/rule/NLI/attr_head | 待跑 | 待测 | 待测 | 待测 | 待测 |\n\n")
+
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("".join(rows), encoding="utf-8")

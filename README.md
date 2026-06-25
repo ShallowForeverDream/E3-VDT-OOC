@@ -22,14 +22,17 @@
 
 1. **VDT + COVE-lite true-context attribution**：利用 VisualNews 原始上下文作为图像真实语境，比较 current caption 与 true image context 的事件字段差异。
 2. **事件字段归因**：输出 `entity / location / time / event_type / relation` 五类字段的一致性分数和冲突字段。
-3. **人工归因评测协议**：通过人工标注集计算 `mismatch_type_accuracy`、`conflict_field_micro_f1`、`macro_f1` 和 `exact_match_rate`。
-4. **Accuracy-preserving sidecar**：默认继承 VDT 主分类结果，不让解释模块覆盖 `final_label`。
+3. **Controlled Counterfactual Attribution**：从 Non-OOC 样本出发，只替换一个实体/地点/年份字段，构造带 gold mismatch type 的可控归因训练与测试集。
+4. **Attribution head**：融合字段级 NLI、证据相关性和图结构对齐特征，训练轻量错配归因头；当前在可控反事实测试集上优于直接 NLI baseline。
+5. **人工归因评测协议**：通过人工标注集计算 `mismatch_type_accuracy`、`conflict_field_micro_f1`、`macro_f1` 和 `exact_match_rate`。
+6. **Accuracy-preserving sidecar**：默认继承 VDT 主分类结果，不让解释模块覆盖 `final_label`。
 
 详见：
 
 - [`docs/INNOVATION_POINTS.md`](docs/INNOVATION_POINTS.md)
 - [`docs/LITERATURE_REVIEW_OOC_EXPLANATION.md`](docs/LITERATURE_REVIEW_OOC_EXPLANATION.md)
 - [`docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md`](docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md)
+- [`docs/CONTROLLED_COUNTERFACTUAL_ATTRIBUTION.md`](docs/CONTROLLED_COUNTERFACTUAL_ATTRIBUTION.md)
 - [`docs/PROJECT_NEXT_STEPS_COVE_LITE.md`](docs/PROJECT_NEXT_STEPS_COVE_LITE.md)
 
 ## 快速开始
@@ -100,17 +103,43 @@ python scripts/eval/run_attribution_baselines.py `
   --output outputs\attribution_eval_metrics.json
 ```
 
+## 运行可控反事实归因实验
+
+用途：解决“原始 OOC 没有错配类型 gold label”的问题。脚本会从 Non-OOC 样本构造单字段最小错配，训练 attribution head，并把结果写入 `outputs/report_tables_v2.md`。
+
+```powershell
+cd D:\MY_PROJECT\OOC\E3-VDT-OOC
+
+powershell -ExecutionPolicy Bypass -File .\scripts\run_controlled_counterfactual_experiment.ps1 `
+  -ProjectRoot D:\MY_PROJECT\OOC\E3-VDT-OOC `
+  -Python python `
+  -MaxPerType 80 `
+  -NliModel facebook/bart-large-mnli `
+  -NliDevice 0
+```
+
+当前一次本地结果（`MaxPerType=80`，test=41）：
+
+| Method | Type Acc | Field Micro-F1 | Exact Match |
+|---|---:|---:|---:|
+| majority | 0.2927 | 0.0000 | 0.2927 |
+| field-wise NLI | 0.6098 | 0.5714 | 0.6098 |
+| attribution head MLP | 0.9268 | 0.9474 | 0.9512 |
+
+注意：这是可控反事实测试集结果，不等同于真实 OOC 人工标注集泛化结果。真实 OOC 仍需要标注 `examples/attribution_eval_candidates_annotate.xlsx` 后评测。
+
 ## 队友先看什么
 
 1. [`docs/PROJECT_NEXT_STEPS_COVE_LITE.md`](docs/PROJECT_NEXT_STEPS_COVE_LITE.md)
 2. [`docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md`](docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md)
-3. [`docs/INNOVATION_POINTS.md`](docs/INNOVATION_POINTS.md)
-4. [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md)
-5. [`docs/SYSTEM_DEMO_ACCEPTANCE.md`](docs/SYSTEM_DEMO_ACCEPTANCE.md)
-6. [`docs/ppt/PPT_COVE_LITE_REVISION.md`](docs/ppt/PPT_COVE_LITE_REVISION.md)
-7. [`docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md`](docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md)
-8. [`docs/VDT-COVE-Attr-系统全流程深度讲稿.md`](docs/VDT-COVE-Attr-系统全流程深度讲稿.md)
-9. [`docs/VDT-COVE-Attr-模块方法深挖版.md`](docs/VDT-COVE-Attr-模块方法深挖版.md)
+3. [`docs/CONTROLLED_COUNTERFACTUAL_ATTRIBUTION.md`](docs/CONTROLLED_COUNTERFACTUAL_ATTRIBUTION.md)
+4. [`docs/INNOVATION_POINTS.md`](docs/INNOVATION_POINTS.md)
+5. [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md)
+6. [`docs/SYSTEM_DEMO_ACCEPTANCE.md`](docs/SYSTEM_DEMO_ACCEPTANCE.md)
+7. [`docs/ppt/PPT_COVE_LITE_REVISION.md`](docs/ppt/PPT_COVE_LITE_REVISION.md)
+8. [`docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md`](docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md)
+9. [`docs/VDT-COVE-Attr-系统全流程深度讲稿.md`](docs/VDT-COVE-Attr-系统全流程深度讲稿.md)
+10. [`docs/VDT-COVE-Attr-模块方法深挖版.md`](docs/VDT-COVE-Attr-模块方法深挖版.md)
 
 ## 大文件约定
 

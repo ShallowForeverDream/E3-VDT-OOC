@@ -11,7 +11,7 @@ Thumbs.db
 configs/paths.local.yaml
 .env
 .env.*
-data/
+/data/
 datasets/
 artifacts/
 checkpoints/
