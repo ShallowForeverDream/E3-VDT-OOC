@@ -293,13 +293,27 @@ def predict_with_model(feat: Dict[str, Any], model_path: Path) -> Optional[Tuple
 def predict(
     image_path: str,
     caption: str,
-    vdt_label: str = "OOC",
+    vdt_label: str = "auto",
     vdt_score: float = 0.87,
     model_path: str = "outputs/no_true_context_attr/no_true_context_attr_head.pkl",
     clip_model: str = "openai/clip-vit-base-patch32",
     device: str = "cuda",
     no_clip: bool = False,
 ) -> Dict[str, Any]:
+    auto_vdt: Optional[Dict[str, Any]] = None
+    if str(vdt_label or "").strip().lower() in {"", "auto", "automatic"}:
+        from e3vdt.inference.vdt_adapter import VDTAdapter
+
+        pred = VDTAdapter(
+            project_root=ROOT,
+            clip_model=clip_model,
+            device=device,
+            no_clip=no_clip,
+        ).predict(image_path=image_path, caption=caption)
+        auto_vdt = pred.to_dict()
+        vdt_label = pred.label
+        vdt_score = float(pred.score)
+
     feat = build_feature_row(image_path, caption, vdt_score=vdt_score, clip_model=clip_model, device=device, no_clip=no_clip)
     if _is_non_ooc_label(vdt_label):
         mismatch_type = "benign illustrative image"
@@ -354,6 +368,7 @@ def predict(
             "field_presence": {f: int(as_float(feat.get(f"{f}_present"))) for f in FIELDS},
         },
         "model": model_meta,
+        "auto_vdt": auto_vdt,
         "explanation": explanation,
     }
 
@@ -362,7 +377,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Infer VDT-CF-Attr without true context.")
     ap.add_argument("--image", required=True)
     ap.add_argument("--caption", required=True)
-    ap.add_argument("--vdt-label", default="OOC")
+    ap.add_argument("--vdt-label", default="auto", help="OOC / Non-OOC / Uncertain / auto. 默认 auto 会先调用 VDTAdapter。")
     ap.add_argument("--vdt-score", type=float, default=0.87)
     ap.add_argument("--model", default="outputs/no_true_context_attr/no_true_context_attr_head.pkl")
     ap.add_argument("--clip-model", default="openai/clip-vit-base-patch32")

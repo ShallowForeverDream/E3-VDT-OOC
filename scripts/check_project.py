@@ -11,6 +11,7 @@ if str(SRC) not in sys.path:
 
 from e3vdt.inference.pipeline import E3VDTPipeline
 from e3vdt.inference.cove_attr_pipeline import VDTCOVEAttrPipeline
+from e3vdt.inference.vdt_adapter import VDTAdapter
 
 pipe = E3VDTPipeline()
 result = pipe.predict_dict(
@@ -42,4 +43,12 @@ assert cove["final_label"] == "OOC"
 assert cove["decision_source"] == "vdt_baseline"
 assert "location" in cove["conflict_fields"]
 assert cove["evidence_relevance"]["sufficient"] is True
-print("\n[OK] E3-VDT-OOC project self-check passed, including VDT-COVE-Attr system route.")
+
+vdt_auto = VDTAdapter(prefer_feature_head=False, no_clip=True).predict(
+    caption="Protesters marched in Paris on Monday.",
+    image_context="Demonstrators gathered in London in 2019 during a climate protest.",
+)
+assert vdt_auto.label == "OOC"
+assert vdt_auto.decision_source == "vdt_adapter_event_context_fallback"
+
+print("\n[OK] E3-VDT-OOC project self-check passed, including automatic VDTAdapter and VDT-COVE-Attr system route.")

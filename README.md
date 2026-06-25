@@ -4,7 +4,7 @@
 
 当前准确定位：
 
-> VDT 负责 `OOC / Non-OOC` 主分类；本项目在 VDT 之上实现两层错配归因：**COVE-lite true-context oracle** 用于构造/评测，**VDT-CF-Attr no-true-context head** 用于更接近真实应用的 `image + caption` 推理。
+> VDT 负责 `OOC / Non-OOC` 主分类；本项目在 VDT 之上实现两层错配归因：**COVE-lite true-context oracle** 用于构造/评测，**VDT-CF-Attr no-true-context head** 用于更接近真实应用的 `image + caption` 推理。当前展示系统已接入 `VDTAdapter`，网页端不再需要手动填写 `VDT label / score`。
 
 本项目不声称当前版本已经超过 VDT 的主分类性能。当前主贡献是：完成 VDT strict baseline 核心复现，并将 VDT 的二分类输出扩展为可评测的错配归因系统。
 
@@ -24,6 +24,7 @@
 2. **事件字段归因**：输出 `entity / location / time / event_type / relation` 五类字段的一致性分数和冲突字段。
 3. **Controlled Counterfactual Attribution**：从 Non-OOC 样本出发，只替换一个实体/地点/年份字段，构造带 gold mismatch type 的可控归因训练与测试集。
 4. **VDT-CF-Attr no-true-context head**：训练阶段可用 true context 构造标签，但推理阶段 attribution head 只使用 `image + current_caption + VDT score`，不依赖 VisualNews 原始上下文。
+   - 系统演示中，`VDT score / label` 由 `src/e3vdt/inference/vdt_adapter.py` 自动给出：本机有 no-true-context 特征表时使用轻量二分类 head；否则回退到 CLIP image-caption similarity；COVE/oracle 页使用事件一致性 fallback。
 5. **Oracle / no-true-context 双评测**：COVE-lite oracle 作为上限和评测辅助；no-true-context image+caption head 作为更贴近真实应用的最终路线。
 6. **人工归因评测协议**：通过人工标注集计算 `mismatch_type_accuracy`、`conflict_field_micro_f1`、`macro_f1` 和 `exact_match_rate`。
 7. **Accuracy-preserving sidecar**：默认继承 VDT 主分类结果，不让解释模块覆盖 `final_label`。
@@ -189,10 +190,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_scaling.p
 ```powershell
 python scripts\infer\infer_vdt_cf_attr.py `
   --image examples\demo_images\london_climate_demonstration_monday.png `
-  --caption "A large protest erupted in Paris on Monday after a new climate policy." `
-  --vdt-label OOC `
-  --vdt-score 0.87
+  --caption "A large protest erupted in Paris on Monday after a new climate policy."
 ```
+
+默认 `--vdt-label auto`，会先调用 `VDTAdapter` 自动判断 OOC / Non-OOC；只有做消融或复现实验对照时才手动传 `--vdt-label OOC --vdt-score 0.87`。
 
 导出本地可演示样例：
 
@@ -253,4 +254,4 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_attr_expe
 
 ## 最稳答辩口径
 
-> 我们完成了 VDT strict baseline 的核心复现。VDT 负责判断是否 OOC。解释部分分两层：COVE-lite true-context attribution 作为 oracle/评测辅助；最终应用路线是 VDT-CF-Attr，用可控反事实样本训练不依赖 true context 的 image+caption attribution head。
+> 我们完成了 VDT strict baseline 的核心复现。展示系统中，自动 `VDTAdapter` 负责给出 OOC / Non-OOC / Uncertain 主分类输入，解释部分分两层：COVE-lite true-context attribution 作为 oracle/评测辅助；最终应用路线是 VDT-CF-Attr，用可控反事实样本训练不依赖 true context 的 image+caption attribution head。需要诚实说明：在线 demo 的 `VDTAdapter` 是 VDT-compatible 自动后端，不等同于已完整接入官方 BLIP-2 VDT checkpoint。

@@ -57,9 +57,10 @@ docs/DEFENSE_QA.md
 
 网页端重点展示三个页：
 
-1. `OOC 检测演示`：展示错配类型、冲突字段、event scores 和 JSON 输出。
-2. `分类不降验证`：证明 sidecar 解释模块不覆盖 VDT baseline 主分类。
-3. `复现实验指标`：展示 VDT strict BLIP-2/GaussianBlur baseline 指标。
+1. `VDT-CF-Attr 无 true context`：只输入图片和当前 caption，系统自动调用 VDTAdapter，再输出错配类型、冲突字段和 JSON。
+2. `VDT-COVE-Attr 主系统`：作为 oracle/评测辅助，展示 true context、evidence relevance 和字段级归因。
+3. `分类不降验证`：证明 sidecar 解释模块不覆盖 VDT baseline 主分类。
+4. `复现实验指标`：展示 VDT strict BLIP-2/GaussianBlur baseline 指标。
 
 ## 2. 报告与 PPT
 
@@ -90,10 +91,11 @@ docs/DEFENSE_QA.md
 
 核心创新不是“模型分数小幅提升”，而是：
 
-1. 事件字段一致性建模：entity / location / time / event_type / relation。
-2. 弱监督错配类型构造：解决 OOC 数据集缺少细粒度 mismatch label 的问题。
-3. 结构化错配归因输出：`mismatch_type`、`conflict_fields`、`event_scores`、`explanation`。
-4. Accuracy-preserving sidecar：主分类继承 VDT baseline，解释模块不降低分类准确率。
+1. 自动 VDT-compatible demo adapter：网页端不再手动填写 `VDT label / score`。
+2. 事件字段一致性建模：entity / location / time / event_type / relation。
+3. 弱监督/可控反事实错配类型构造：解决 OOC 数据集缺少细粒度 mismatch label 的问题。
+4. 结构化错配归因输出：`mismatch_type`、`conflict_fields`、`event_scores`、`explanation`。
+5. Accuracy-preserving sidecar：主分类继承 VDT baseline，解释模块不降低分类准确率。
 
 代码级验收：
 
@@ -123,14 +125,11 @@ final deliverable check passed.
 
 1. PPT 第 1-4 页：问题背景、任务定义、baseline 局限。
 2. PPT 第 5-8 页：VDT baseline、E3-VDT 框架、accuracy-preserving 策略、事件字段。
-3. 打开网页 `OOC 检测演示`，依次展示：
-   - 正例：`ex01_non_ooc_same_event`
-   - 地点错配：`ex02_location_mismatch`
-   - 主体错配：`ex04_entity_mismatch`
-   - Hard Negative：`ex07_multi_field_hard_negative`
-4. 打开网页 `分类不降验证`，展示：事件字段发现冲突，但最终 label 仍等于 VDT baseline label。
-5. 打开网页 `复现实验指标`，说明 baseline 复现状态。
-6. 回到 PPT 第 13-15 页：对比、系统运行、总结。
+3. 打开网页 `VDT-CF-Attr 无 true context`，上传示例图片/选择 examples：证明只输入 image + caption，系统自动产生 VDT label/score。
+4. 打开网页 `VDT-COVE-Attr 主系统`，说明 oracle/评测辅助如何定位字段冲突。
+5. 打开网页 `分类不降验证`，展示：事件字段发现冲突，但最终 label 仍等于 VDT baseline label。
+6. 打开网页 `复现实验指标`，说明 baseline 复现状态。
+7. 回到 PPT 第 13-15 页：对比、系统运行、总结。
 
 ## 6. 答辩前仍需人工确认
 

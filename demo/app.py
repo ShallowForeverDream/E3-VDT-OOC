@@ -21,6 +21,7 @@ if str(SRC) not in sys.path:
 
 from e3vdt.inference.pipeline import E3VDTPipeline
 from e3vdt.inference.cove_attr_pipeline import VDTCOVEAttrPipeline
+from e3vdt.inference.vdt_adapter import VDTAdapter
 
 try:
     from scripts.infer.infer_vdt_cf_attr import predict as predict_vdt_cf_attr
@@ -29,6 +30,7 @@ except Exception:
 
 legacy_pipe = E3VDTPipeline()
 cove_pipe = VDTCOVEAttrPipeline()
+vdt_adapter = VDTAdapter(project_root=ROOT)
 
 
 def read_jsonl(path: Path) -> List[Dict[str, Any]]:
@@ -69,9 +71,6 @@ def _load_no_true_context_examples():
             rows.append([
                 str(p) if p.exists() else None,
                 item.get("caption", ""),
-                item.get("vdt_label", "OOC"),
-                float(item.get("vdt_score", 0.87) or 0.87),
-                item.get("gold_mismatch_type", ""),
             ])
     if rows:
         return rows
@@ -79,9 +78,9 @@ def _load_no_true_context_examples():
     # model may not match these placeholder images; use the exported local
     # VisualNews cases above for a stronger live demo.
     return [
-        [str(ROOT / "examples/demo_images/london_climate_demonstration_monday.png"), "A large protest erupted in Paris on Monday after a new climate policy.", "OOC", 0.87, "demo placeholder"],
-        [str(ROOT / "examples/demo_images/elon_musk_beijing_2024.png"), "Barack Obama will meet officials in Beijing in 2024.", "OOC", 0.87, "demo placeholder"],
-        [str(ROOT / "examples/demo_images/flood_shanghai_2024.png"), "A flood caused evacuations in Shanghai in 2024.", "Non-OOC", 0.91, "demo placeholder"],
+        [str(ROOT / "examples/demo_images/london_climate_demonstration_monday.png"), "A large protest erupted in Paris on Monday after a new climate policy."],
+        [str(ROOT / "examples/demo_images/elon_musk_beijing_2024.png"), "Barack Obama will meet officials in Beijing in 2024."],
+        [str(ROOT / "examples/demo_images/flood_shanghai_2024.png"), "A flood caused evacuations in Shanghai in 2024."],
     ]
 
 
@@ -112,6 +111,10 @@ def _fmt(v: Any) -> str:
     return str(v)
 
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def render_reproduction_metrics() -> str:
     rows = _load_reproduction_metrics()
     if not rows:
@@ -137,8 +140,6 @@ def load_cove_case(key: str):
     return (
         row.get("current_caption", ""),
         row.get("true_image_context", ""),
-        row.get("vdt_label", "OOC"),
-        float(row.get("vdt_score", 0.87) or 0.87),
         row.get("sample_id", "manual"),
         row.get("image_id", "manual-image"),
         row.get("domain", "demo"),
@@ -172,16 +173,18 @@ def _event_table(obj: Dict[str, Any]) -> List[List[Any]]:
     return [[name, ", ".join(cur.get(k) or []), ", ".join(tru.get(k) or [])] for name, k in pairs]
 
 
-def run_cove_attr(case_key: str, current_caption: str, true_context: str, vdt_label: str, vdt_score: float, sample_id: str, image_id: str, domain: str):
+def run_cove_attr(case_key: str, current_caption: str, true_context: str, sample_id: str, image_id: str, domain: str):
+    auto_vdt = vdt_adapter.predict(caption=current_caption or "", image_context=true_context or "")
     obj = cove_pipe.predict(
         current_caption=current_caption,
         true_image_context=true_context,
-        vdt_label=vdt_label,
-        vdt_score=float(vdt_score),
+        vdt_label=auto_vdt.label,
+        vdt_score=float(auto_vdt.score),
         sample_id=sample_id or "manual",
         image_id=image_id or "manual-image",
         domain=domain or "demo",
     )
+    obj["auto_vdt"] = auto_vdt.to_dict()
     conflicts = ", ".join(obj["conflict_fields"]) if obj["conflict_fields"] else "无明确冲突"
     ev = obj["evidence_relevance"]
     summary = f"""
@@ -189,7 +192,8 @@ def run_cove_attr(case_key: str, current_caption: str, true_context: str, vdt_la
 
 - **最终主分类**：{obj['final_label']}  
 - **主分类来源**：`{obj['decision_source']}`，{obj['classification_note']}  
-- **VDT baseline**：{obj['vdt']['label']} / score={obj['vdt']['score']}  
+- **自动 VDT baseline**：{obj['vdt']['label']} / score={obj['vdt']['score']}
+- **VDT adapter 来源**：`{obj['auto_vdt']['decision_source']}`
 - **错配类型**：**{obj['mismatch_type']}**  
 - **冲突字段**：`{conflicts}`  
 - **证据相关性**：{ev['level']} / score={ev['score']} / sufficient={ev['sufficient']}  
@@ -208,7 +212,7 @@ def run_cove_attr(case_key: str, current_caption: str, true_context: str, vdt_la
     return summary, evidence_summary, _event_table(obj), _field_table(obj), json.dumps(obj, ensure_ascii=False, indent=2)
 
 
-def run_no_true_context_attr(image, caption: str, vdt_label: str, vdt_score: float):
+def run_no_true_context_attr(image, caption: str):
     if predict_vdt_cf_attr is None:
         return (
             "### VDT-CF-Attr 未加载\n\n`predict_vdt_cf_attr` 导入失败，请检查 `scripts/infer/infer_vdt_cf_attr.py` 和依赖。",
@@ -224,19 +228,23 @@ def run_no_true_context_attr(image, caption: str, vdt_label: str, vdt_score: flo
             [],
             "{}",
         )
+    auto_vdt = vdt_adapter.predict(image_path=image_path, caption=caption or "")
     obj = predict_vdt_cf_attr(
         image_path=image_path,
         caption=caption or "",
-        vdt_label=vdt_label or "OOC",
-        vdt_score=float(vdt_score),
+        vdt_label=auto_vdt.label,
+        vdt_score=float(auto_vdt.score),
         model_path=_default_no_true_context_model(),
         device=os.environ.get("VDT_CF_ATTR_DEVICE", "cuda"),
+        no_clip=_env_flag("VDT_CF_ATTR_NO_CLIP"),
     )
+    obj["auto_vdt"] = auto_vdt.to_dict()
     conflicts = ", ".join(obj.get("conflict_fields") or []) or "无明确冲突"
     summary = f"""
 ### VDT-CF-Attr 输出（不输入 true context）
 
-- **VDT 主分类**：{obj['vdt_label']} / score={obj['vdt_score']}
+- **自动 VDT 主分类**：{obj['vdt_label']} / score={obj['vdt_score']}
+- **VDT adapter 来源**：`{obj['auto_vdt']['decision_source']}`
 - **错配类型**：**{obj['mismatch_type']}**
 - **冲突字段**：`{conflicts}`
 - **置信度**：{obj['confidence']}
@@ -247,7 +255,7 @@ def run_no_true_context_attr(image, caption: str, vdt_label: str, vdt_score: flo
 
 {obj['explanation']}
 
-> 答辩口径：这是最终应用路线的演示入口。它只输入图片和当前 caption；true context 只用于训练构造和评测参考，不进入推理。
+> 答辩口径：这是最终应用路线的演示入口。它只输入图片和当前 caption；VDT label/score 由系统自动产生，true context 只用于训练构造和评测参考，不进入推理。
 """.strip()
     fs = obj.get("feature_summary", {})
     sim_rows = []
@@ -324,7 +332,8 @@ def render_system_dashboard() -> str:
 | COVE-lite true context | demo 已接入 | 使用 VisualNews 原始 caption/article metadata 作为图片真实语境 |
 | Evidence relevance | demo 已接入 | 证据不足时输出 evidence insufficient，避免强行解释 |
 | Field-wise NLI attribution | demo 已接入 | 输出 entity/location/time/event_type/relation 字段矛盾 |
-| VDT-CF-Attr no-true-context | demo 已接入 | 推理只用 image + caption + VDT score，不输入 true context |
+| 自动 VDT adapter | demo 已接入 | 自动输出 OOC / Non-OOC / Uncertain，不再由前端手填 |
+| VDT-CF-Attr no-true-context | demo 已接入 | 推理只用 image + caption；系统自动调用 VDT adapter 后再做归因，不输入 true context |
 | 大规模归因实验 | 可运行脚本已准备，结果待补 | 答辩后用人工 gold set + ablation 验证解释可靠性 |
 
 {pilot}
@@ -365,21 +374,19 @@ def build_app():
         gr.Markdown(render_system_dashboard())
         with gr.Tabs():
             with gr.Tab("VDT-CF-Attr 无 true context"):
-                gr.Markdown("## 最终应用路线：只输入 image + current caption + VDT score\n该页不提供 `true_image_context` 输入；若本地存在 `outputs/no_true_context_attr/no_true_context_attr_head.pkl`，会加载 no-true-context attribution head，否则回退到 field-prompt grounding rule。")
+                gr.Markdown("## 最终应用路线：只输入 image + current caption\n该页不提供 `true_image_context`，也不要求手填 `VDT label / score`。系统会先自动调用 `VDTAdapter` 得到 OOC/Non-OOC，再进入 no-true-context attribution head。若本地存在 `outputs/no_true_context_attr/no_true_context_attr_head.pkl`，会加载 attribution head，否则回退到 field-prompt grounding rule。")
                 with gr.Row():
                     with gr.Column(scale=1):
                         ntc_image = gr.Image(label="新闻图片 / Image", type="filepath")
                         ntc_caption = gr.Textbox(label="Current caption / 当前新闻文本", lines=4)
-                        ntc_vdt_label = gr.Radio(label="VDT baseline label", choices=["OOC", "Non-OOC", "Uncertain"], value="OOC")
-                        ntc_vdt_score = gr.Slider(label="VDT baseline score", minimum=0.0, maximum=1.0, value=0.87, step=0.01)
                         ntc_btn = gr.Button("运行 VDT-CF-Attr", variant="primary")
                     with gr.Column(scale=1):
                         ntc_summary = gr.Markdown()
                         ntc_label = gr.Label(label="No-true-context attribution summary")
                         ntc_sims = gr.Dataframe(headers=["字段", "CLIP prompt similarity", "caption 中是否出现"], label="字段级 prompt grounding 特征", wrap=True)
                         ntc_raw = gr.Code(label="完整 JSON 输出", language="json")
-                ntc_btn.click(run_no_true_context_attr, inputs=[ntc_image, ntc_caption, ntc_vdt_label, ntc_vdt_score], outputs=[ntc_summary, ntc_label, ntc_sims, ntc_raw])
-                gr.Examples(examples=NO_TRUE_CONTEXT_EXAMPLES, inputs=[ntc_image, ntc_caption, ntc_vdt_label, ntc_vdt_score])
+                ntc_btn.click(run_no_true_context_attr, inputs=[ntc_image, ntc_caption], outputs=[ntc_summary, ntc_label, ntc_sims, ntc_raw])
+                gr.Examples(examples=NO_TRUE_CONTEXT_EXAMPLES, inputs=[ntc_image, ntc_caption])
 
             with gr.Tab("VDT-COVE-Attr 主系统"):
                 gr.Markdown("## Oracle/评测辅助：VDT 主分类 + COVE-lite 真实语境 + 字段级归因\n该页会输入 `true_image_context`，因此不要把它说成最终数据集外推理路线。")
@@ -388,8 +395,6 @@ def build_app():
                         case = gr.Dropdown(label="选择演示样例", choices=CASE_KEYS, value=CASE_KEYS[0])
                         current = gr.Textbox(label="Current caption / 当前新闻文本", lines=4)
                         true_ctx = gr.Textbox(label="True image context / 图片真实语境", lines=4)
-                        vdt_label = gr.Radio(label="VDT baseline label", choices=["OOC", "Non-OOC", "Uncertain"], value="OOC")
-                        vdt_score = gr.Slider(label="VDT baseline score", minimum=0.0, maximum=1.0, value=0.87, step=0.01)
                         sample_id = gr.Textbox(label="sample_id", visible=False)
                         image_id = gr.Textbox(label="image_id", visible=False)
                         domain = gr.Textbox(label="domain", visible=False)
@@ -401,9 +406,9 @@ def build_app():
                         event_table = gr.Dataframe(headers=["字段", "current caption", "true image context"], label="事件字段抽取对比", wrap=True)
                         nli_table = gr.Dataframe(headers=["字段", "NLI标签", "当前值", "真实语境值", "置信度", "解释"], label="Field-wise NLI / 字段矛盾判断", wrap=True)
                         raw = gr.Code(label="完整系统 JSON", language="json")
-                case.change(load_cove_case, inputs=[case], outputs=[current, true_ctx, vdt_label, vdt_score, sample_id, image_id, domain, demo_point])
-                run_btn.click(run_cove_attr, inputs=[case, current, true_ctx, vdt_label, vdt_score, sample_id, image_id, domain], outputs=[summary, evidence, event_table, nli_table, raw])
-                app.load(load_cove_case, inputs=[case], outputs=[current, true_ctx, vdt_label, vdt_score, sample_id, image_id, domain, demo_point])
+                case.change(load_cove_case, inputs=[case], outputs=[current, true_ctx, sample_id, image_id, domain, demo_point])
+                run_btn.click(run_cove_attr, inputs=[case, current, true_ctx, sample_id, image_id, domain], outputs=[summary, evidence, event_table, nli_table, raw])
+                app.load(load_cove_case, inputs=[case], outputs=[current, true_ctx, sample_id, image_id, domain, demo_point])
 
             with gr.Tab("单样本调试/旧版备用"):
                 gr.Markdown("该页保留旧版手动 `image_context` 调试能力，用于快速展示字段抽取；主答辩请优先使用第一个 tab。")

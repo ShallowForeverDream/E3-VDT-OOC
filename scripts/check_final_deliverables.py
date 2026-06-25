@@ -17,6 +17,7 @@ REQUIRED_FILES = [
     "requirements-dev.txt",
     ".github/workflows/ci.yml",
     "demo/app.py",
+    "src/e3vdt/inference/vdt_adapter.py",
     "src/e3vdt/inference/pipeline.py",
     "src/e3vdt/inference/cove_attr_pipeline.py",
     "src/e3vdt/attribution/field_nli.py",

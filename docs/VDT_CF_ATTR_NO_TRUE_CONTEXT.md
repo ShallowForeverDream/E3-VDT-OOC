@@ -18,7 +18,7 @@ current_caption + true_image_context -> 字段冲突 -> mismatch_type
 
 ```text
 image + current_caption
-  -> VDT 判断 OOC / Non-OOC
+  -> VDTAdapter 自动判断 OOC / Non-OOC / Uncertain
   -> Attribution Head 判断错配类型
 ```
 
@@ -50,8 +50,15 @@ gold_mismatch_type = location mismatch
 ```text
 image
 current_caption
+```
+
+系统内部自动产生：
+
+```text
 VDT score / VDT label
 ```
+
+当前实现位于 `src/e3vdt/inference/vdt_adapter.py`：本机有 no-true-context 实验特征表时优先训练轻量二分类 head；没有特征表时回退到 CLIP image-caption similarity；COVE/oracle 页面没有原图输入时，用 current caption 与 true context 的事件一致性产生 VDT-compatible label。它的作用是让 demo 不再手填 `VDT label / score`，但不能包装成“官方 BLIP-2 VDT checkpoint 已完整在线接入”。
 
 不允许输入：
 

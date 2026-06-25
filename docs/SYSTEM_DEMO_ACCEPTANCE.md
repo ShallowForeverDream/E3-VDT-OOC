@@ -7,11 +7,12 @@
 | 模块 | 状态 | 文件/入口 |
 |---|---|---|
 | VDT 主分类复现 | completed | `examples/reproduction_metrics.json`, `docs/REPRODUCTION_STATUS.md` |
+| 自动 VDT adapter | completed for demo | `src/e3vdt/inference/vdt_adapter.py`；网页端不再手填 `VDT label / score` |
 | COVE-lite true-context 输入 | completed for demo | `examples/cove_attr_demo_cases.jsonl` |
 | Evidence relevance / sufficiency gate | completed for demo | `src/e3vdt/attribution/evidence_relevance.py` |
 | Field-wise NLI-shaped attribution | completed for demo | `src/e3vdt/attribution/field_nli.py` |
 | VDT-COVE-Attr 统一 pipeline | completed | `src/e3vdt/inference/cove_attr_pipeline.py` |
-| Gradio 系统展示 | completed | `demo/app.py` 的 `VDT-COVE-Attr 主系统` tab |
+| Gradio 系统展示 | completed | `demo/app.py` 的 `VDT-CF-Attr 无 true context` 和 `VDT-COVE-Attr 主系统` tab |
 | 系统演示自检 | completed | `python scripts/run_cove_attr_demo_cases.py` |
 
 ## 系统演示集结果
@@ -30,7 +31,7 @@ examples/cove_attr_demo_outputs.json
 
 ## 明天答辩时可以说
 
-> 我们已经把新技术路线做成一个可运行系统：VDT 负责主分类，COVE-lite 提供图片真实语境，Evidence relevance 判断证据是否足够，Field-wise NLI attribution 输出 entity/location/time/event_type/relation 字段矛盾。当前演示集用于验收系统闭环；归因模块是否真正可靠，将在答辩后用人工 gold set 和 ablation 实验验证。
+> 我们已经把新技术路线做成一个可运行系统：网页端只输入图片和当前文本时，`VDTAdapter` 会自动给出 OOC / Non-OOC / Uncertain；随后 VDT-CF-Attr 输出错配类型。COVE-lite 页面作为 oracle/评测辅助，提供图片真实语境，Evidence relevance 判断证据是否足够，Field-wise NLI attribution 输出 entity/location/time/event_type/relation 字段矛盾。当前演示集用于验收系统闭环；归因模块是否真正可靠，将在答辩后用人工 gold set 和 ablation 实验验证。
 
 ## 明天答辩时不要说
 
@@ -38,6 +39,7 @@ examples/cove_attr_demo_outputs.json
 - 不要说当前 field-wise NLI 已经是训练好的 SOTA NLI 模型。
 - 不要说归因模块已经在 NewsCLIPpings 全量上被严格证明。
 - 不要说我们超过了 VDT 主分类性能。
+- 不要说在线 demo 已完整接入官方 BLIP-2 VDT checkpoint；当前是 VDT-compatible 自动 adapter + fallback，strict VDT 指标来自离线复现实验。
 
 ## 答辩后必须补的实验
 
