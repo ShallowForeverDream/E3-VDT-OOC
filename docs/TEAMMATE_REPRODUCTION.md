@@ -23,6 +23,8 @@ image + current caption
 ```text
 outputs/no_true_context_attr_5way_1000/no_true_context_attr_head.pkl
 outputs/no_true_context_attr_5way_1000/image_caption_features_*.csv
+outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl
+outputs/no_true_context_attr_5way_plus2000/image_caption_features_*.csv
 outputs/no_true_context_attr_demo_images/
 VisualNews 原图 / origin.tar
 PyTorch / CLIP 权重缓存
@@ -101,24 +103,26 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_attr_expe
   -ProjectRoot D:\MY_PROJECT\OOC\E3-VDT-OOC `
   -Python python `
   -MaxPerType 1000 `
-  -ContextPairs outputs\cove_lite_context_pairs_3000.jsonl `
-  -OutputDir outputs\no_true_context_attr_5way_1000 `
+  -ContextPairs outputs\cove_lite_context_pairs_10000.jsonl `
+  -OutputDir outputs\no_true_context_attr_5way_plus2000 `
   -Device cuda `
   -BatchSize 24 `
   -IncludeDifferentEvent `
-  -MaxDifferentEvent 1000
+  -MaxDifferentEvent 3000
 ```
 
 完整效果至少需要：
 
 ```text
-outputs/no_true_context_attr_5way_1000/no_true_context_attr_head.pkl
-outputs/no_true_context_attr_5way_1000/image_caption_features_train.csv
-outputs/no_true_context_attr_5way_1000/image_caption_features_val.csv
-outputs/no_true_context_attr_5way_1000/image_caption_features_test.csv
+outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl
+outputs/no_true_context_attr_5way_plus2000/image_caption_features_train.csv
+outputs/no_true_context_attr_5way_plus2000/image_caption_features_val.csv
+outputs/no_true_context_attr_5way_plus2000/image_caption_features_test.csv
 outputs/no_true_context_attr_demo_cases.jsonl
 outputs/no_true_context_attr_demo_images/
 ```
+
+当前系统默认优先查找 `outputs/no_true_context_attr_5way_plus2000/`，找不到时才回退到 `outputs/no_true_context_attr_5way_1000/` 和基础 `outputs/no_true_context_attr/`。
 
 这些文件不进 Git，是为了避免提交模型/数据大文件。
 
@@ -139,4 +143,3 @@ outputs/no_true_context_attr_demo_images/
 如果队友电脑只有源码，不要把 fallback 输出当模型指标。正确说法是：
 
 > GitHub 源码可以复现系统结构、UI、评估脚本和保守降级逻辑；完整模型效果需要本地训练产物或数据集生成的 `outputs/`。我们不把大模型权重、图片数据集和 `.pkl` 训练产物提交到 GitHub。
-

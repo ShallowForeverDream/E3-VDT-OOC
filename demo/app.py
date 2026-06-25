@@ -96,6 +96,9 @@ NO_TRUE_CONTEXT_EXAMPLES = _load_no_true_context_examples()
 
 def _default_no_true_context_model() -> str:
     candidates = [
+        # 最新演示默认：单字段各约 1000 + 原始 OOC different-event 总计 3000 条（约额外 2000 条），
+        # 并排除了 100 条人工真实 OOC gold set，避免训练/评测重合。
+        ROOT / "outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl",
         ROOT / "outputs/no_true_context_attr_5way_1000/no_true_context_attr_head.pkl",
         ROOT / "outputs/no_true_context_attr/no_true_context_attr_head.pkl",
     ]
@@ -341,7 +344,7 @@ def render_system_dashboard() -> str:
 | Field-wise NLI attribution | demo 已接入 | 输出 entity/location/time/event_type/relation 字段矛盾 |
 | 自动 VDT adapter | demo 已接入 | 自动输出 OOC / Non-OOC / Uncertain，不再由前端手填 |
 | VDT-CF-Attr no-true-context | demo 已接入 | 推理只用 image + caption；系统自动调用 VDT adapter 后再做归因，不输入 true context |
-| 大规模归因实验 | 可运行脚本已准备，结果待补 | 答辩后用人工 gold set + ablation 验证解释可靠性 |
+| plus2000 different-event 训练 | 已完成本地实验 | 额外加入原始 OOC different-event 样本，真实 OOC 100 条评估有提升，但仍需诚实说明泛化未完全解决 |
 
 {pilot}
 
@@ -360,6 +363,7 @@ def render_experiment_board() -> str:
         "| COVE-lite context coverage | ⚠️ 脚本已准备，路径待队友复核 | `scripts/context/build_cove_lite_context_pairs.py` | 答辩后补全 VisualNews metadata 路径后跑 |",
         "| 真实 OOC 人工 gold set | ✅ 已导入 100 条 | `examples/real_ooc_attribution_eval_set.jsonl` | 可用于真实 OOC 归因评估；仍需补 10–15 条自然语言理由做展示 |",
         "| Attribution ablation | ✅ 已跑真实 OOC oracle 辅助评估 | `examples/real_ooc_manual_eval_metrics.json` | 当前结果说明 different-event 泛化仍弱，是后续优化依据 |",
+        "| No-true-context plus2000 | ✅ 已跑增强训练 | `outputs/no_true_context_attr_5way_plus2000/` | 真实 OOC Type Acc 从 0.09 提升到 0.29，但仍需诚实说明未完全解决 |",
         "| NLI/LLM extractor | 规划中 | `vdt_cove_attr_package/` | 作为答辩后增强，不冒充已完成 |",
         "",
         "## 已有本地输出提醒",
@@ -407,6 +411,19 @@ def render_experiment_board() -> str:
             lines.append(f"| {name} | {res.get('matched', 0)} | {float(res.get('mismatch_type_accuracy', 0.0)):.4f} | {float(res.get('conflict_field_micro_f1', 0.0)):.4f} | {float(res.get('exact_match_rate', 0.0)):.4f} |")
         lines.append("")
         lines.append("> 注意：这张表使用人工 gold set 评估 true-context/oracle 辅助归因方法；no-true-context image+caption head 需要单独构造图像特征后再评估，不能混写。")
+    ntc_real = read_json_first([ROOT / "outputs" / "real_ooc_no_true_context_eval_metrics.json"])
+    if ntc_real and ntc_real.get("models"):
+        lines += [
+            "",
+            "## 真实 OOC 100 条评估结果（no-true-context image+caption head）",
+            "",
+            "| Model | Type Acc | Field Micro-F1 | Exact Match |",
+            "|---|---:|---:|---:|",
+        ]
+        for name, res in ntc_real.get("models", {}).items():
+            lines.append(f"| {name} | {float(res.get('mismatch_type_accuracy', 0.0)):.4f} | {float(res.get('conflict_field_micro_f1', 0.0)):.4f} | {float(res.get('exact_match_rate', 0.0)):.4f} |")
+        lines.append("")
+        lines.append("> plus2000 版本真实 OOC 指标明显高于旧五类模型，但还不能说已经可靠解决 different-event 泛化。")
     return "\n".join(lines)
 
 
@@ -415,7 +432,7 @@ def build_app():
         gr.Markdown(render_system_dashboard())
         with gr.Tabs():
             with gr.Tab("VDT-CF-Attr 无 true context"):
-                gr.Markdown("## 最终应用路线：只输入 image + current caption\n该页不提供 `true_image_context`，也不要求手填 `VDT label / score`。系统会先自动调用 `VDTAdapter` 得到 OOC/Non-OOC，再进入 no-true-context attribution head。若本地存在 `outputs/no_true_context_attr/no_true_context_attr_head.pkl`，会加载 attribution head，否则回退到 field-prompt grounding rule。首次运行需要加载 CLIP/transformers 权重，等待几十秒是正常现象；后续同一进程会复用缓存。")
+                gr.Markdown("## 最终应用路线：只输入 image + current caption\n该页不提供 `true_image_context`，也不要求手填 `VDT label / score`。系统会先自动调用 `VDTAdapter` 得到 OOC/Non-OOC，再进入 no-true-context attribution head。若本地存在 `outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl`，会优先加载最新 attribution head；否则依次回退到旧五类模型、基础 no-true 模型、field-prompt grounding rule。首次运行需要加载 CLIP/transformers 权重，等待几十秒是正常现象；后续同一进程会复用缓存。")
                 with gr.Row():
                     with gr.Column(scale=1):
                         ntc_image = gr.Image(label="新闻图片 / Image", type="filepath")

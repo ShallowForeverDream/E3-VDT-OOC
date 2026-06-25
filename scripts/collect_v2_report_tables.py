@@ -165,6 +165,38 @@ def main() -> None:
     else:
         rows.append("| five-class LR/MLP | 待跑 | 待跑 | 待测 | 待测 | 待测 | 待统计 |\n\n")
 
+    ntc_plus = read_json("outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_metrics.json")
+    ntc_plus_stats = read_json("outputs/no_true_context_attr_5way_plus2000/counterfactual_generation_stats.json")
+    real_ntc = read_json("outputs/real_ooc_no_true_context_eval_metrics.json")
+    rows.append("## Table 14. No-true-context plus2000 different-event augmentation\n")
+    rows.append("| Evaluation | Method/Model | N | Type Acc | Field Micro-F1 | Exact Match | Counts none/location/time/entity/different | Notes |\n|---|---|---:|---:|---:|---:|---|---|\n")
+    if ntc_plus:
+        counts_obj = ntc_plus_stats.get("type_counts", {}) if ntc_plus_stats else {}
+        counts = f"{counts_obj.get('none',0)}/{counts_obj.get('location_swap',0)}/{counts_obj.get('time_swap',0)}/{counts_obj.get('entity_swap',0)}/{counts_obj.get('different_event_original_ooc',0)}"
+        selected = ntc_plus.get("selected_model_name", "")
+        selected_res = (ntc_plus.get("results", {}) or {}).get(selected, {})
+        rows.append(
+            f"| Synthetic held-out test | {selected or '-'} | {selected_res.get('n', 0)} | "
+            f"{selected_res.get('mismatch_type_accuracy', 0):.4f} | "
+            f"{selected_res.get('conflict_field_micro_f1', 0):.4f} | "
+            f"{selected_res.get('exact_match_rate', 0):.4f} | {counts} | "
+            "原始 OOC different-event 训练样本排除了人工 100 条 gold set |\n"
+        )
+    else:
+        rows.append("| Synthetic held-out test | plus2000 head | 待跑 | 待测 | 待测 | 待测 | 待统计 | 待跑 |\n")
+    if real_ntc and real_ntc.get("models"):
+        for name, res in real_ntc.get("models", {}).items():
+            rows.append(
+                f"| Real OOC manual-100 no-true-context | {name} | {res.get('n', 0)} | "
+                f"{res.get('mismatch_type_accuracy', 0):.4f} | "
+                f"{res.get('conflict_field_micro_f1', 0):.4f} | "
+                f"{res.get('exact_match_rate', 0):.4f} | - | "
+                f"pred={res.get('pred_type_counts', {})} |\n"
+            )
+        rows.append("\n")
+    else:
+        rows.append("| Real OOC manual-100 no-true-context | old vs plus2000 | 待跑 | 待测 | 待测 | 待测 | - | 需要先生成真实 OOC image+caption features |\n\n")
+
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("".join(rows), encoding="utf-8")

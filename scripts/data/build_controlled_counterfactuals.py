@@ -54,6 +54,39 @@ def read_jsonl(path: Path) -> List[Dict[str, Any]]:
     return rows
 
 
+def load_exclusion_sets(paths: Iterable[str]) -> Dict[str, set]:
+    """Load sample/text/image ids that must not be reused for original-OOC training.
+
+    The manual real-OOC gold set is for evaluation, not training.  When we add
+    original OOC rows as `different-event mismatch`, any overlap with manual
+    samples must be filtered out to avoid evaluation leakage.
+    """
+    out = {"sample_id": set(), "text_id": set(), "image_id": set(), "source_sample_id": set()}
+    for raw in paths:
+        if not str(raw or "").strip():
+            continue
+        path = Path(raw)
+        if not path.exists():
+            continue
+        for row in read_jsonl(path):
+            for key in list(out):
+                val = str(row.get(key) or "").strip()
+                if val:
+                    out[key].add(val)
+            sid = str(row.get("sample_id") or "").strip()
+            if sid:
+                out["source_sample_id"].add(sid)
+    return out
+
+
+def excluded_by_manual_gold(row: Dict[str, Any], exclude_sets: Dict[str, set]) -> bool:
+    for key in ["sample_id", "text_id", "image_id", "source_sample_id"]:
+        val = str(row.get(key) or "").strip()
+        if val and val in exclude_sets.get(key, set()):
+            return True
+    return False
+
+
 def write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
@@ -361,6 +394,7 @@ def select_original_ooc_different_events(
     max_similarity: float,
     max_token_jaccard: float,
     min_caption_tokens: int,
+    exclude_sets: Optional[Dict[str, set]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     selected: List[Dict[str, Any]] = []
     stats: Dict[str, Any] = {
@@ -372,11 +406,15 @@ def select_original_ooc_different_events(
         "skip_reasons": Counter(),
         "similarity_bins": Counter(),
     }
+    exclude_sets = exclude_sets or {}
     candidates = [r for r in rows if is_ooc(r)]
     rng.shuffle(candidates)
     for idx, row in enumerate(candidates):
         if len(selected) >= max_n:
             break
+        if excluded_by_manual_gold(row, exclude_sets):
+            stats["skip_reasons"]["manual_gold_overlap"] += 1
+            continue
         cur = clean_space(row.get("current_caption") or "")
         true_ctx = clean_space(row.get("true_image_context") or "")
         if token_count(cur) < min_caption_tokens or token_count(true_ctx) < min_caption_tokens:
@@ -502,6 +540,12 @@ def main() -> None:
     ap.add_argument("--different-event-max-similarity", type=float, default=0.65, help="Maximum NewsCLIPpings similarity_score for original OOC rows used as different-event.")
     ap.add_argument("--different-event-max-token-jaccard", type=float, default=0.08, help="Maximum token Jaccard between caption and true context for different-event rows.")
     ap.add_argument("--different-event-min-caption-tokens", type=int, default=4)
+    ap.add_argument(
+        "--exclude-different-event-gold",
+        nargs="*",
+        default=[],
+        help="JSONL files whose sample_id/text_id/image_id must be excluded from original-OOC different-event training rows.",
+    )
     ap.add_argument("--row-level-split", action="store_true", help="Legacy split; allows leakage and is only for ablation/debugging.")
     args = ap.parse_args()
 
@@ -585,6 +629,7 @@ def main() -> None:
 
     if args.include_original_ooc_different_event:
         max_diff = args.max_different_event if args.max_different_event > 0 else args.max_per_type
+        exclude_sets = load_exclusion_sets(args.exclude_different_event_gold)
         diff_rows, diff_stats = select_original_ooc_different_events(
             rows=rows,
             nlp=nlp,
@@ -593,7 +638,10 @@ def main() -> None:
             max_similarity=args.different_event_max_similarity,
             max_token_jaccard=args.different_event_max_token_jaccard,
             min_caption_tokens=args.different_event_min_caption_tokens,
+            exclude_sets=exclude_sets,
         )
+        diff_stats["exclude_gold_files"] = list(args.exclude_different_event_gold)
+        diff_stats["exclude_set_sizes"] = {k: len(v) for k, v in exclude_sets.items()}
         all_out.extend(diff_rows)
         stats["kept"]["different_event_original_ooc"] += len(diff_rows)
         stats["attempted"]["different_event_original_ooc"] += diff_stats.get("selected", 0) + sum(diff_stats.get("skip_reasons", {}).values())

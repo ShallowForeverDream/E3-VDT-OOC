@@ -145,11 +145,100 @@ Exact Match = 0.3257
 
 结论：系统现在**可以输出并训练 different-event mismatch**，但从 test 指标看，对 different-event 的区分能力还不强，不能声称已经可靠解决“完全错配 vs 单字段错配”。更稳的说法是：我们完成了五类闭环训练和初步区分，后续还需要更强视觉语义特征和人工真实 OOC 标注来提升 different-event recall。
 
+## Plus2000：加入额外原始 OOC different-event 训练样本
+
+用户提出的新训练设置是：
+
+```text
+none / entity / location / time ≈ 1000 / 1000 / 1000 / 1000
+different-event mismatch = 先保留五类版本中的原始 OOC，再额外加入约 2000 条原始 OOC
+人工标注 100 条真实 OOC gold set 不参与训练
+```
+
+本轮重新用 `outputs/cove_lite_context_pairs_10000.jsonl` 选样，筛选条件仍然保持严格：
+
+```text
+NewsCLIPpings similarity_score <= 0.65
+caption 与 true_image_context 的 token Jaccard <= 0.08
+caption / true_context 至少 4 个 token
+排除 examples/real_ooc_attribution_eval_set.jsonl 中的 sample_id / text_id / image_id
+```
+
+命令摘录：
+
+```powershell
+python scripts\context\build_cove_lite_context_pairs.py `
+  --newsclippings-data-dir D:\MY_PROJECT\OOC\datasets\NewsCLIPpings_repo\news_clippings\data `
+  --visualnews-metadata-dir E:\OOC_Datasets\VisualNews\articles_metadata `
+  --output outputs\cove_lite_context_pairs_10000.jsonl `
+  --max-records 10000 --seed 2026
+
+powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_attr_experiment.ps1 `
+  -ProjectRoot D:\MY_PROJECT\OOC\E3-VDT-OOC `
+  -Python python `
+  -MaxPerType 1000 `
+  -ContextPairs outputs\cove_lite_context_pairs_10000.jsonl `
+  -OutputDir outputs\no_true_context_attr_5way_plus2000 `
+  -Device cuda `
+  -BatchSize 24 `
+  -IncludeDifferentEvent `
+  -MaxDifferentEvent 3000 `
+  -DifferentEventMaxSimilarity 0.65 `
+  -DifferentEventMaxTokenJaccard 0.08
+```
+
+训练数据分布：
+
+| Label | Count |
+|---|---:|
+| benign illustrative image / none | 1000 |
+| entity mismatch | 1000 |
+| location mismatch | 1000 |
+| temporal mismatch | 1000 |
+| different-event mismatch | 3000 |
+
+其中有 94 条原始 OOC 因与人工 gold set 的 `sample_id/text_id/image_id/source_sample_id` 重合而被排除。泄漏检查仍为 0：
+
+```text
+source_sample_id leakage = 0
+image_id leakage = 0
+text_id leakage = 0
+cross_split duplicate caption = 0
+```
+
+合成 held-out test 上的最佳模型变为 `attr_head_image_caption_mlp`：
+
+| Method | Type Acc | Field Micro-F1 | Exact Match |
+|---|---:|---:|---:|
+| majority | 0.4669 | 0.7012 | 0.4669 |
+| logistic regression no-true-context | 0.3317 | 0.6655 | 0.4228 |
+| image+caption MLP attribution head | **0.5220** | 0.6876 | 0.3487 |
+
+注意：由于 test 里 `different-event mismatch` 占比也更高，majority 的 field-F1 和 exact 不低；因此这张表只能说明 MLP 在五类类型准确率上优于多数类，但不能单独证明真实 OOC 泛化已经解决。
+
+真实 OOC 人工 100 条 no-true-context 评估结果：
+
+| Model | Type Acc | Field Micro-F1 | Exact Match | 预测分布摘要 |
+|---|---:|---:|---:|---|
+| `no_true_context_attr_5way_1000` | 0.0900 | 0.3276 | 0.0300 | different-event 只预测 6 条 |
+| `no_true_context_attr_5way_plus2000` | **0.2900** | **0.4781** | 0.0300 | different-event 预测 33 条 |
+
+这说明：额外加入原始 OOC 的 different-event 训练样本以后，模型在真实 OOC 上更愿意输出 `different-event mismatch`，类型准确率从 0.09 提升到 0.29，字段 micro-F1 从 0.328 提升到 0.478。结论要诚实写成“训练分布修正带来明显改善，但仍未达到可靠泛化”，不能写成已经彻底解决。
+
+系统默认加载顺序也已更新：
+
+```text
+outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl
+→ outputs/no_true_context_attr_5way_1000/no_true_context_attr_head.pkl
+→ outputs/no_true_context_attr/no_true_context_attr_head.pkl
+→ field-prompt grounding rule fallback
+```
+
 ## 答辩口径
 
 - VDT 主分类没有被修改；解释模块作为 sidecar，不覆盖 VDT 的 OOC / Non-OOC 输出。
 - COVE-lite true-context 是 oracle / 上限 / 构造和评测辅助，不是最终数据集外推理路线。
 - VDT-CF-Attr no-true-context 是最终演示路线：推理只输入 `image + current_caption + VDT score`。
-- 实验支持的结论是：可控反事实归因数据能训练一个不使用 true context 的错配类型 head；在 1000 规模下 LR head 明显超过 prompt rule。
-- 不要声称 MLP 已经最好；当前 MLP 没有稳定超过 LR。
-- 不要声称已经解决真实 OOC 泛化；真实 OOC 仍需人工标注集验证。
+- 实验支持的结论是：可控反事实归因数据能训练一个不使用 true context 的错配类型 head；在加入额外原始 OOC different-event 样本后，真实 OOC 100 条评测有明显改善。
+- 不要声称 MLP 在所有设置都最好；基础 1000 五类时 LR 更稳，plus2000 设置下 MLP 的类型准确率更高。
+- 不要声称已经解决真实 OOC 泛化；真实 OOC 100 条结果显示方向正确但指标仍不高。

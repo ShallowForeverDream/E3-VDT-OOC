@@ -15,7 +15,8 @@ param(
     [switch]$IncludeDifferentEvent,
     [int]$MaxDifferentEvent = 0,
     [double]$DifferentEventMaxSimilarity = 0.65,
-    [double]$DifferentEventMaxTokenJaccard = 0.08
+    [double]$DifferentEventMaxTokenJaccard = 0.08,
+    [string]$DifferentEventExcludeGold = "examples\real_ooc_attribution_eval_set.jsonl"
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,6 +46,9 @@ if (-not $ReuseCounterfactual) {
             "--different-event-max-similarity", "$DifferentEventMaxSimilarity",
             "--different-event-max-token-jaccard", "$DifferentEventMaxTokenJaccard"
         )
+        if (Test-Path $DifferentEventExcludeGold) {
+            $buildArgs += @("--exclude-different-event-gold", $DifferentEventExcludeGold)
+        }
     }
     Run-Step "[1/5] build controlled counterfactual data with group split" $buildArgs
 } else {

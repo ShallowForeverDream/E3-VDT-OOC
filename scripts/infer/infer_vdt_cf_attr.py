@@ -305,7 +305,7 @@ def predict(
     caption: str,
     vdt_label: str = "auto",
     vdt_score: float = 0.87,
-    model_path: str = "outputs/no_true_context_attr/no_true_context_attr_head.pkl",
+    model_path: str = "outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl",
     clip_model: str = "openai/clip-vit-base-patch32",
     device: str = "cuda",
     no_clip: bool = False,
@@ -399,7 +399,7 @@ def main() -> None:
     ap.add_argument("--caption", required=True)
     ap.add_argument("--vdt-label", default="auto", help="OOC / Non-OOC / Uncertain / auto. 默认 auto 会先调用 VDTAdapter。")
     ap.add_argument("--vdt-score", type=float, default=0.87)
-    ap.add_argument("--model", default="outputs/no_true_context_attr/no_true_context_attr_head.pkl")
+    ap.add_argument("--model", default="outputs/no_true_context_attr_5way_plus2000/no_true_context_attr_head.pkl")
     ap.add_argument("--clip-model", default="openai/clip-vit-base-patch32")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--no-clip", action="store_true")

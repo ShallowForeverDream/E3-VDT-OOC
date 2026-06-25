@@ -146,6 +146,7 @@ class VDTAdapter:
             dirs.append(self.feature_dir)
         dirs.extend(
             [
+                self.project_root / "outputs" / "no_true_context_attr_5way_plus2000",
                 self.project_root / "outputs" / "no_true_context_attr_5way_1000",
                 self.project_root / "outputs" / "no_true_context_attr",
             ]

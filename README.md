@@ -233,6 +233,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_attr_expe
 
 本地五类训练分布为 `none/entity/location/time/different-event = 1000/1000/1000/1000/987`。最好模型为 `logistic_regression_no_true_context`，test 上 **Type Acc 0.4011 / Field Micro-F1 0.5841**。其中 `different-event mismatch` 的 recall 为 0.2025，说明已经接入五类训练，但完全错配与单字段错配的区分仍需更强特征和人工真实 OOC 评测。
 
+进一步按真实 OOC 分布修正训练集：保留单字段 `none/entity/location/time≈1000`，并从原始 OOC 中额外筛选不同于人工 gold set 的 `different-event mismatch`，使五类训练分布变为：
+
+```text
+none/entity/location/time/different-event = 1000/1000/1000/1000/3000
+```
+
+对应本地输出目录：
+
+```text
+outputs/no_true_context_attr_5way_plus2000
+```
+
+该版本已经成为系统默认优先加载的 no-true-context attribution head。合成 held-out test 上，最佳 `attr_head_image_caption_mlp` 达到 **Type Acc 0.5220 / Field Micro-F1 0.6876**；在真实 OOC 人工 100 条 no-true-context 评估上，相比旧五类模型从 **Type Acc 0.0900 / Field Micro-F1 0.3276** 提升到 **0.2900 / 0.4781**。这说明训练分布修正有效，但仍不能声称真实 OOC 归因已经完全可靠。
+
 ## 导入真实 OOC 100 条人工归因评测集
 
 两批中文人工标注表可导入为标准 JSONL/CSV：
