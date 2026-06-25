@@ -23,6 +23,7 @@ except Exception:  # pragma: no cover
 
 YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 TITLE_PHRASE_RE = re.compile(r"\b[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,3}\b")
+DEFAULT_YEAR_POOL = [str(y) for y in range(2016, 2027)]
 
 LOCATION_LABELS = {"GPE", "LOC", "FAC"}
 ENTITY_LABELS = {"PERSON", "ORG", "NORP"}
@@ -144,24 +145,54 @@ def replacement_pool(non_ooc_rows: List[Dict[str, Any]], nlp=None) -> Dict[str, 
             if key not in seen[(sp.field, "ANY")]:
                 pools[sp.field]["ANY"].append(val)
                 seen[(sp.field, "ANY")].add(key)
+    # Time counterfactuals are intentionally constrained to YEAR -> YEAR.
+    # Even when the sampled split has few distinct years, keep a stable
+    # 2016-2026 pool so valid replacement does not become the bottleneck.
+    for year in DEFAULT_YEAR_POOL:
+        for key in ["YEAR", "ANY"]:
+            if year.lower() not in seen[("time", key)]:
+                pools["time"][key].append(year)
+                seen[("time", key)].add(year.lower())
     return {f: {k: v for k, v in d.items() if v} for f, d in pools.items()}
 
 
-def choose_replacement(pool: Dict[str, List[str]], span: Span, rng: random.Random) -> Optional[str]:
+def replacement_candidates(pool: Dict[str, List[str]], span: Span) -> List[str]:
     candidates = list(pool.get(span.subtype, [])) or list(pool.get("ANY", []))
-    candidates = [x for x in candidates if x.strip().lower() != span.text.strip().lower()]
-    if not candidates:
-        return None
     if span.field == "time":
-        # Prefer a close but different year to preserve grammaticality.
+        candidates = list(dict.fromkeys(candidates + list(pool.get("YEAR", [])) + DEFAULT_YEAR_POOL))
+    candidates = [x for x in candidates if x.strip().lower() != span.text.strip().lower()]
+    return list(dict.fromkeys(candidates))
+
+
+def choose_replacements(pool: Dict[str, List[str]], span: Span, rng: random.Random, max_n: int = 1) -> List[str]:
+    candidates = replacement_candidates(pool, span)
+    if not candidates:
+        return []
+    if span.field == "time":
+        # YEAR -> YEAR only.  Prefer a close but different year to preserve
+        # grammaticality while staying inside the available/default pool.
         try:
             y = int(span.text)
-            nearby = [str(x) for x in [y - 5, y - 3, y - 1, y + 1, y + 3, y + 5] if 1900 <= x <= 2035 and str(x) != span.text]
+            candidate_set = set(candidates)
+            nearby = [
+                str(x)
+                for x in [y - 5, y - 3, y - 1, y + 1, y + 3, y + 5]
+                if str(x) in candidate_set and str(x) != span.text
+            ]
             if nearby:
-                return rng.choice(nearby)
+                rng.shuffle(nearby)
+                rest = [x for x in candidates if x not in set(nearby)]
+                rng.shuffle(rest)
+                return (nearby + rest)[:max_n]
         except Exception:
             pass
-    return rng.choice(candidates)
+    rng.shuffle(candidates)
+    return candidates[:max_n]
+
+
+def choose_replacement(pool: Dict[str, List[str]], span: Span, rng: random.Random) -> Optional[str]:
+    vals = choose_replacements(pool, span, rng, max_n=1)
+    return vals[0] if vals else None
 
 
 def replace_span(text: str, span: Span, repl: str) -> str:
@@ -199,7 +230,7 @@ def make_positive(row: Dict[str, Any], idx: int) -> Dict[str, Any]:
     return out
 
 
-def make_counterfactual(row: Dict[str, Any], span: Span, replacement: str, idx: int) -> Dict[str, Any]:
+def make_counterfactual(row: Dict[str, Any], span: Span, replacement: str, idx: int, variant_idx: int = 0) -> Dict[str, Any]:
     original = str(row.get("current_caption") or "")
     edited = replace_span(original, span, replacement)
     type_map = {
@@ -211,7 +242,7 @@ def make_counterfactual(row: Dict[str, Any], span: Span, replacement: str, idx: 
     base_id = str(row.get("sample_id") or row.get("id") or idx)
     out = dict(row)
     out.update({
-        "sample_id": f"{base_id}__cf_{span.field}_{idx}",
+        "sample_id": f"{base_id}__cf_{span.field}_{idx}_{variant_idx}",
         "source_sample_id": base_id,
         "original_caption": original,
         "current_caption": edited,
@@ -317,6 +348,12 @@ def main() -> None:
     ap.add_argument("--spacy-model", default="en_core_web_sm")
     ap.add_argument("--train-ratio", type=float, default=0.70)
     ap.add_argument("--val-ratio", type=float, default=0.15)
+    ap.add_argument(
+        "--max-time-variants-per-source",
+        type=int,
+        default=6,
+        help="Allow multiple YEAR->YEAR variants from one source row for time_swap. Group split keeps variants together.",
+    )
     ap.add_argument("--row-level-split", action="store_true", help="Legacy split; allows leakage and is only for ablation/debugging.")
     args = ap.parse_args()
 
@@ -333,11 +370,14 @@ def main() -> None:
         "total_input": len(rows),
         "non_ooc_input": len(non_ooc),
         "max_per_type": args.max_per_type,
+        "max_time_variants_per_source": args.max_time_variants_per_source,
         "spacy_model_loaded": nlp is not None,
         "pool_sizes": {field: {k: len(v) for k, v in pool.items()} for field, pool in pools.items()},
+        "default_year_pool": DEFAULT_YEAR_POOL,
         "attempted": Counter(),
         "kept": Counter(),
         "skip_reasons": Counter(),
+        "span_rows": Counter(),
     }
 
     # Positive rows.
@@ -351,25 +391,41 @@ def main() -> None:
         text = str(row.get("current_caption") or "")
         spans = extract_spans(text, nlp=nlp)
         for target in targets:
+            if any(s.field == target for s in spans):
+                stats["span_rows"][target] += 1
+        for target in targets:
             if target_counts[target] >= args.max_per_type:
                 continue
             target_spans = [s for s in spans if s.field == target]
             if not target_spans:
                 stats["skip_reasons"][f"{target}:no_span"] += 1
                 continue
-            span = rng.choice(target_spans)
-            repl = choose_replacement(pools.get(target, {}), span, rng)
-            stats["attempted"][f"{target}_swap"] += 1
-            if not repl:
+            rng.shuffle(target_spans)
+            row_variant_budget = args.max_time_variants_per_source if target == "time" else 1
+            row_variants_kept = 0
+            row_any_replacement = False
+            for span_idx, span in enumerate(target_spans):
+                if target_counts[target] >= args.max_per_type or row_variants_kept >= row_variant_budget:
+                    break
+                needed = min(args.max_per_type - target_counts[target], row_variant_budget - row_variants_kept)
+                repls = choose_replacements(pools.get(target, {}), span, rng, max_n=needed)
+                if repls:
+                    row_any_replacement = True
+                for local_variant_idx, repl in enumerate(repls):
+                    if target_counts[target] >= args.max_per_type or row_variants_kept >= row_variant_budget:
+                        break
+                    stats["attempted"][f"{target}_swap"] += 1
+                    variant_id = row_variants_kept * 100 + span_idx * 10 + local_variant_idx
+                    cf = make_counterfactual(row, span, repl, i, variant_idx=variant_id)
+                    if not cf["validation"]["target_field_changed"]:
+                        stats["skip_reasons"][f"{target}:unchanged"] += 1
+                        continue
+                    all_out.append(cf)
+                    stats["kept"][f"{target}_swap"] += 1
+                    target_counts[target] += 1
+                    row_variants_kept += 1
+            if not row_any_replacement:
                 stats["skip_reasons"][f"{target}:no_replacement"] += 1
-                continue
-            cf = make_counterfactual(row, span, repl, i)
-            if not cf["validation"]["target_field_changed"]:
-                stats["skip_reasons"][f"{target}:unchanged"] += 1
-                continue
-            all_out.append(cf)
-            stats["kept"][f"{target}_swap"] += 1
-            target_counts[target] += 1
         if all(target_counts[t] >= args.max_per_type for t in targets):
             break
 
@@ -384,16 +440,26 @@ def main() -> None:
     stats["attempted"] = dict(stats["attempted"])
     stats["kept"] = dict(stats["kept"])
     stats["skip_reasons"] = dict(stats["skip_reasons"])
+    stats["span_rows"] = dict(stats["span_rows"])
     stats["split_counts"] = {k: len(v) for k, v in splits.items()}
     stats["split_strategy"] = "row_level_by_type_legacy" if args.row_level_split else "group_by_source_sample_id_image_id"
     stats["type_counts"] = dict(Counter(r.get("edit_type") for r in all_out))
+    stats["target_counts"] = dict(target_counts)
     stats["split_type_counts"] = {split: dict(Counter(r.get("edit_type") for r in split_rows)) for split, split_rows in splits.items()}
     stats["keep_rate"] = {
         k: stats["kept"].get(k, 0) / max(1, stats["attempted"].get(k, stats["kept"].get(k, 0)))
         for k in ["location_swap", "time_swap", "entity_swap"]
     }
+    stats["time_swap_summary"] = {
+        "generated": stats["attempted"].get("time_swap", 0),
+        "kept": stats["kept"].get("time_swap", 0),
+        "skipped_no_span": stats["skip_reasons"].get("time:no_span", 0),
+        "skipped_no_replacement": stats["skip_reasons"].get("time:no_replacement", 0),
+        "skipped_unchanged": stats["skip_reasons"].get("time:unchanged", 0),
+        "note": "time_swap edits are YYYY -> YYYY; if kept is below max_per_type, the limiting factor is available current_caption rows with a YYYY span.",
+    }
     (out_dir / "counterfactual_generation_stats.json").write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({"output_dir": str(out_dir), "records": len(all_out), "split_counts": stats["split_counts"], "type_counts": stats["type_counts"]}, ensure_ascii=False, indent=2))
+    print(json.dumps({"output_dir": str(out_dir), "records": len(all_out), "split_counts": stats["split_counts"], "type_counts": stats["type_counts"], "time_swap_summary": stats["time_swap_summary"]}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

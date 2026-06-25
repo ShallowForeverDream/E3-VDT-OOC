@@ -2,6 +2,7 @@ param(
     [string]$ProjectRoot = "D:\MY_PROJECT\OOC\E3-VDT-OOC",
     [string]$Python = "python",
     [int]$MaxPerType = 80,
+    [string]$ContextPairs = "outputs\cove_lite_context_pairs.jsonl",
     [string]$OutputDir = "outputs\no_true_context_attr",
     [string]$OriginDataJson = "E:\OOC_Datasets\VisualNews\origin\data.json",
     [string]$OriginTar = "E:\OOC_Datasets\VisualNews\origin.tar",
@@ -27,7 +28,7 @@ function Run-Step {
 if (-not $ReuseCounterfactual) {
     Run-Step "[1/5] build controlled counterfactual data with group split" @(
         "scripts\data\build_controlled_counterfactuals.py",
-        "--context-pairs", "outputs\cove_lite_context_pairs.jsonl",
+        "--context-pairs", $ContextPairs,
         "--output-dir", $OutputDir,
         "--max-per-type", "$MaxPerType"
     )

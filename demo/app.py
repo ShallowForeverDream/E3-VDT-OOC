@@ -232,6 +232,7 @@ def run_no_true_context_attr(image, caption: str, vdt_label: str, vdt_score: flo
 - **视觉证据状态**：{obj['evidence_status']}
 - **是否使用 true context**：`{obj['uses_true_context']}`
 - **决策来源**：`{obj['decision_source']}`
+- **字段存在性后处理**：`{obj.get('postprocess_applied', False)}` / `{obj.get('postprocess_reason', 'no_change')}`
 
 {obj['explanation']}
 
@@ -245,6 +246,8 @@ def run_no_true_context_attr(image, caption: str, vdt_label: str, vdt_score: flo
         "mismatch_type": obj.get("mismatch_type"),
         "confidence": obj.get("confidence"),
         "uses_true_context": obj.get("uses_true_context"),
+        "postprocess_applied": obj.get("postprocess_applied"),
+        "postprocess_reason": obj.get("postprocess_reason"),
         "clip_caption_sim": fs.get("clip_caption_sim"),
     }
     return summary, label, sim_rows, json.dumps(obj, ensure_ascii=False, indent=2)

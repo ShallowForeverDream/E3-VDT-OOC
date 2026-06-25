@@ -35,6 +35,7 @@
 - [`docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md`](docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md)
 - [`docs/CONTROLLED_COUNTERFACTUAL_ATTRIBUTION.md`](docs/CONTROLLED_COUNTERFACTUAL_ATTRIBUTION.md)
 - [`docs/VDT_CF_ATTR_NO_TRUE_CONTEXT.md`](docs/VDT_CF_ATTR_NO_TRUE_CONTEXT.md)
+- [`docs/NO_TRUE_CONTEXT_SCALING_RESULTS.md`](docs/NO_TRUE_CONTEXT_SCALING_RESULTS.md)
 - [`docs/PROJECT_NEXT_STEPS_COVE_LITE.md`](docs/PROJECT_NEXT_STEPS_COVE_LITE.md)
 
 ## 快速开始
@@ -171,6 +172,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_attr_expe
   -BatchSize 16
 ```
 
+80/200/1000 扩展实验：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_scaling.ps1 `
+  -ProjectRoot D:\MY_PROJECT\OOC\E3-VDT-OOC `
+  -Python python `
+  -Sizes "80,200,1000" `
+  -ContextPairs outputs\cove_lite_context_pairs_3000.jsonl `
+  -Device cuda `
+  -BatchSize 24
+```
+
 单样本推理：
 
 ```powershell
@@ -188,13 +201,15 @@ python scripts\export_no_true_context_demo_cases.py --n 8 --device cuda
 python demo\app.py
 ```
 
-当前一次本地结果（`MaxPerType=80`，group split，test=38，CLIP image+caption features）：
+当前一次本地结果（`MaxPerType=80`，group split，test=42，CLIP image+caption features，none/location/time/entity=80/80/80/80）：
 
 | Method | Uses true context at inference? | Type Acc | Field Micro-F1 | Exact Match |
 |---|---|---:|---:|---:|
-| field prompt grounding rule | False | 0.3421 | 0.3415 | 0.3947 |
-| logistic regression no-true-context | False | 0.4474 | 0.3939 | 0.2632 |
-| image+caption MLP attribution head | False | 0.4474 | 0.3500 | 0.4474 |
+| field prompt grounding rule | False | 0.2857 | 0.2381 | 0.3333 |
+| logistic regression no-true-context | False | 0.4286 | 0.5301 | 0.2619 |
+| image+caption MLP attribution head | False | 0.3571 | 0.3667 | 0.2619 |
+
+Scaling 结果（`outputs/no_true_context_scaling_results.csv`）显示：`MaxPerType=1000` 时 logistic regression no-true-context 达到 **Type Acc 0.5275 / Field Micro-F1 0.5719**，高于 field prompt grounding rule。当前结论应实事求是写成：no-true-context 路线可运行且随数据扩展有提升，但 MLP 尚未稳定超过 LR，真实 OOC 泛化仍需要人工标注验证。
 
 解释：这个结果低于 COVE-lite oracle 是合理的，因为它不再使用真实上下文；它更能反映数据集外推理难度。
 
@@ -204,13 +219,14 @@ python demo\app.py
 2. [`docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md`](docs/ATTRIBUTION_EXPERIMENT_PROTOCOL.md)
 3. [`docs/CONTROLLED_COUNTERFACTUAL_ATTRIBUTION.md`](docs/CONTROLLED_COUNTERFACTUAL_ATTRIBUTION.md)
 4. [`docs/VDT_CF_ATTR_NO_TRUE_CONTEXT.md`](docs/VDT_CF_ATTR_NO_TRUE_CONTEXT.md)
-5. [`docs/INNOVATION_POINTS.md`](docs/INNOVATION_POINTS.md)
-6. [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md)
-7. [`docs/SYSTEM_DEMO_ACCEPTANCE.md`](docs/SYSTEM_DEMO_ACCEPTANCE.md)
-8. [`docs/ppt/PPT_COVE_LITE_REVISION.md`](docs/ppt/PPT_COVE_LITE_REVISION.md)
-9. [`docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md`](docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md)
-10. [`docs/VDT-COVE-Attr-系统全流程深度讲稿.md`](docs/VDT-COVE-Attr-系统全流程深度讲稿.md)
-11. [`docs/VDT-COVE-Attr-模块方法深挖版.md`](docs/VDT-COVE-Attr-模块方法深挖版.md)
+5. [`docs/NO_TRUE_CONTEXT_SCALING_RESULTS.md`](docs/NO_TRUE_CONTEXT_SCALING_RESULTS.md)
+6. [`docs/INNOVATION_POINTS.md`](docs/INNOVATION_POINTS.md)
+7. [`docs/REPRODUCTION_STATUS.md`](docs/REPRODUCTION_STATUS.md)
+8. [`docs/SYSTEM_DEMO_ACCEPTANCE.md`](docs/SYSTEM_DEMO_ACCEPTANCE.md)
+9. [`docs/ppt/PPT_COVE_LITE_REVISION.md`](docs/ppt/PPT_COVE_LITE_REVISION.md)
+10. [`docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md`](docs/DEFENSE_QA_COVE_LITE_ADDENDUM.md)
+11. [`docs/VDT-COVE-Attr-系统全流程深度讲稿.md`](docs/VDT-COVE-Attr-系统全流程深度讲稿.md)
+12. [`docs/VDT-COVE-Attr-模块方法深挖版.md`](docs/VDT-COVE-Attr-模块方法深挖版.md)
 
 ## 大文件约定
 

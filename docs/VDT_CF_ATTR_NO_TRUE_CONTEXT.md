@@ -138,6 +138,34 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_attr_expe
   -Device cpu
 ```
 
+### 80/200/1000 扩展实验
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_scaling.ps1 `
+  -ProjectRoot D:\MY_PROJECT\OOC\E3-VDT-OOC `
+  -Python python `
+  -Sizes "80,200,1000" `
+  -ContextPairs outputs\cove_lite_context_pairs_3000.jsonl `
+  -Device cuda `
+  -BatchSize 24
+```
+
+如果 `outputs\cove_lite_context_pairs_3000.jsonl` 不存在，可以让脚本现场构造：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_scaling.ps1 `
+  -ProjectRoot D:\MY_PROJECT\OOC\E3-VDT-OOC `
+  -Python python `
+  -Sizes "80,200,1000" `
+  -ContextPairs outputs\cove_lite_context_pairs_3000.jsonl `
+  -NewsClippingsDataDir D:\MY_PROJECT\OOC\datasets\NewsCLIPpings_repo\news_clippings\data `
+  -VisualNewsMetadataDir E:\OOC_Datasets\VisualNews\articles_metadata `
+  -ContextMaxRecords 3000 `
+  -RebuildContextPairs `
+  -Device cuda `
+  -BatchSize 24
+```
+
 ## 4. 当前本地结果
 
 配置：
@@ -147,7 +175,8 @@ MaxPerType = 80
 group split = source_sample_id / image_id / text_id
 true context at inference = False
 CLIP = openai/clip-vit-base-patch32
-test = 38
+test = 42
+class counts = none/location/time/entity = 80/80/80/80
 ```
 
 泄漏检查：
@@ -163,12 +192,45 @@ cross-split duplicate caption = 0
 
 | Method | Uses true context at inference? | Type Acc | Field Micro-F1 | Exact Match |
 |---|---|---:|---:|---:|
-| majority | False | 0.2368 | 0.2812 | 0.2368 |
-| field prompt grounding rule | False | 0.3421 | 0.3415 | 0.3947 |
-| logistic regression no-true-context | False | 0.4474 | 0.3939 | 0.2632 |
-| image+caption MLP attribution head | False | 0.4474 | 0.3500 | 0.4474 |
+| majority | False | 0.1429 | 0.1690 | 0.1429 |
+| field prompt grounding rule | False | 0.2857 | 0.2381 | 0.3333 |
+| logistic regression no-true-context | False | 0.4286 | 0.5301 | 0.2619 |
+| image+caption MLP attribution head | False | 0.3571 | 0.3667 | 0.2619 |
 
-## 5. 如何解释这个结果
+补充：已修复 `time_swap` 不平衡问题。当前 `MaxPerType=80` 下 `time_swap=80`，不再是旧版的 27。
+
+### Scaling 结果
+
+本地使用 `outputs\cove_lite_context_pairs_3000.jsonl` 跑完 `MaxPerType=80/200/1000`。三组泄漏检查均为 0。
+
+| MaxPerType | Counts none/location/time/entity | Best stable method | Type Acc | Field Micro-F1 | Exact Match |
+|---:|---|---|---:|---:|---:|
+| 80 | 80/80/80/80 | logistic regression no-true-context | 0.2745 | 0.3564 | 0.1961 |
+| 200 | 200/200/200/200 | logistic regression no-true-context | 0.4266 | 0.5195 | 0.2308 |
+| 1000 | 1000/797/1000/1000 | logistic regression no-true-context | 0.5275 | 0.5719 | 0.3250 |
+
+解释：`MaxPerType=1000` 时 location 只有 797，是因为 `cove_lite_context_pairs_3000` 里可抽取地点 span 的 Non-OOC caption 不足；time 类通过 `YYYY -> YYYY` 多反事实变体补到 1000。学习曲线显示，no-true-context 设置下 logistic regression head 比 prompt rule 更稳定；MLP 还没有稳定超过 LR，因此报告里不要把 MLP 包装成最终最优模型。
+
+## 5. 推理后处理约束
+
+已在 `scripts/infer/infer_vdt_cf_attr.py` 增加 field-presence constraint：
+
+```text
+如果 caption 中 entity_present=0，则最终 JSON 不能输出 entity mismatch；
+如果 location/time/event_type/relation 不存在，同理不能输出对应 mismatch；
+无有效字段时，OOC 输出 uncertain / insufficient visual evidence，Non-OOC 输出 benign illustrative image。
+```
+
+JSON 会额外输出：
+
+```json
+{
+  "postprocess_applied": true,
+  "postprocess_reason": "field_absent_constraint_reselected_from_present_fields"
+}
+```
+
+## 6. 如何解释这个结果
 
 这个结果比 COVE-lite oracle attribution 低，是正常且重要的：
 
@@ -184,7 +246,7 @@ cross-split duplicate caption = 0
 | COVE-lite oracle / field-wise NLI | Yes | 归因上限、训练构造、人工评测辅助 |
 | VDT-CF-Attr image+caption head | No | 最终实际推理路线 |
 
-## 6. 最稳答辩口径
+## 7. 最稳答辩口径
 
 > 我们最初实现了 COVE-lite oracle attribution，用于说明“有真实上下文时可以定位字段冲突”。但这个设置推理阶段依赖 true context，实际应用受限。因此我们进一步实现 VDT-CF-Attr：用 Non-OOC 图文对构造单字段反事实错配，训练阶段得到干净错配类型标签；推理阶段 attribution head 只接收 image、current caption 和 VDT 输出，不读取 true context。当前 no-true-context 结果仍低于 oracle，说明仅靠图像判断人物、地点、时间错配更难，后续需要 OCR/检索/更强 VLM caption 作为视觉证据增强。
 

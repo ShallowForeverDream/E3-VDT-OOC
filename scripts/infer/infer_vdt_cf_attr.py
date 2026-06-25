@@ -27,6 +27,7 @@ from scripts.features.build_image_caption_attribution_features import (  # noqa:
 
 _SCORER_CACHE: Dict[Tuple[str, str, bool], ClipScorer] = {}
 
+UNCERTAIN_TYPE = "uncertain / insufficient visual evidence"
 
 TYPE_TO_FIELDS = {
     "benign illustrative image": [],
@@ -37,7 +38,25 @@ TYPE_TO_FIELDS = {
     "event-type mismatch": ["event_type"],
     "relation mismatch": ["relation"],
     "different-event mismatch": ["entity", "location", "event_type"],
+    UNCERTAIN_TYPE: ["evidence_insufficient"],
+    # Backward-compatible alias used by early demo/fallback versions.
     "uncertain / evidence insufficient": ["evidence_insufficient"],
+}
+
+FIELD_TO_TYPE = {
+    "entity": "entity mismatch",
+    "location": "location mismatch",
+    "time": "temporal mismatch",
+    "event_type": "event-type mismatch",
+    "relation": "relation mismatch",
+}
+
+TYPE_PRIMARY_FIELD = {
+    "entity mismatch": "entity",
+    "location mismatch": "location",
+    "temporal mismatch": "time",
+    "event-type mismatch": "event_type",
+    "relation mismatch": "relation",
 }
 
 
@@ -110,9 +129,9 @@ def prompt_rule(feat: Dict[str, Any]) -> Tuple[str, Set[str], float]:
         if as_float(feat.get(f"{f}_present")) > 0
     }
     if as_float(feat.get("image_loaded")) <= 0:
-        return "uncertain / evidence insufficient", {"evidence_insufficient"}, 0.0
+        return UNCERTAIN_TYPE, {"evidence_insufficient"}, 0.0
     if not sims:
-        return "uncertain / evidence insufficient", {"evidence_insufficient"}, 0.2
+        return UNCERTAIN_TYPE, {"evidence_insufficient"}, 0.2
     field = min(sims, key=sims.get)
     spread = max(sims.values()) - min(sims.values())
     if spread < 0.015:
@@ -125,6 +144,107 @@ def prompt_rule(feat: Dict[str, Any]) -> Tuple[str, Set[str], float]:
         "relation": "relation mismatch",
     }[field]
     return typ, {field}, min(0.95, max(0.35, spread * 8))
+
+
+def _is_non_ooc_label(vdt_label: str) -> bool:
+    return str(vdt_label).strip().lower() in {"non-ooc", "non_ooc", "non ooc", "benign"}
+
+
+def _present_fields(feat: Dict[str, Any]) -> Set[str]:
+    return {f for f in FIELDS if as_float(feat.get(f"{f}_present")) > 0}
+
+
+def _choose_present_field_by_prompt(feat: Dict[str, Any], candidates: Set[str]) -> Optional[str]:
+    """Pick one caption-present field for re-selection, but only when visual scores exist.
+
+    This is deliberately conservative: if the image/CLIP path is unavailable,
+    the system should not invent a concrete mismatch type from field presence
+    alone.  Among present fields, lower CLIP prompt similarity means the image
+    is less grounded for that caption field, so it is the least-bad
+    re-selection heuristic.
+    """
+    valid = [f for f in FIELDS if f in candidates]
+    if not valid:
+        return None
+    if not feat.get("image_loaded") or not feat.get("clip_enabled"):
+        return None
+    return min(valid, key=lambda f: as_float(feat.get(f"clip_prompt_sim_{f}")))
+
+
+def postprocess_prediction(
+    mismatch_type: str,
+    conflict_fields: Set[str],
+    vdt_label: str,
+    feat: Dict[str, Any],
+) -> Tuple[str, Set[str], bool, str]:
+    """Apply field-presence constraints for no-true-context demo inference.
+
+    A mismatch type is only allowed if the corresponding caption field was
+    actually detected.  For example, when `entity_present=0`, the final JSON
+    must not claim `entity mismatch`; otherwise the demo is logically
+    inconsistent and hard to defend.
+    """
+    original_type = mismatch_type
+    original_fields = set(conflict_fields)
+
+    if mismatch_type == "uncertain / evidence insufficient":
+        mismatch_type = UNCERTAIN_TYPE
+    if mismatch_type == "none":
+        mismatch_type = "benign illustrative image"
+
+    if _is_non_ooc_label(vdt_label) or mismatch_type == "benign illustrative image":
+        final_fields: Set[str] = set()
+        applied = original_type != "benign illustrative image" or bool(original_fields)
+        reason = "vdt_non_ooc_or_benign_gate" if applied else "no_change"
+        return "benign illustrative image", final_fields, applied, reason
+
+    present = _present_fields(feat)
+    valid_conflicts = {f for f in conflict_fields if f in present}
+    invalid_conflicts = {f for f in conflict_fields if f in FIELDS and f not in present}
+    primary = TYPE_PRIMARY_FIELD.get(mismatch_type)
+
+    # Single-field mismatch types cannot survive if their target field is
+    # absent from the caption.
+    if primary and primary not in present:
+        if valid_conflicts:
+            # If a multilabel field head supplied another present field, keep
+            # the explanation concrete but map it to a valid single-field type.
+            chosen = _choose_present_field_by_prompt(feat, valid_conflicts) or next(
+                f for f in FIELDS if f in valid_conflicts
+            )
+            return FIELD_TO_TYPE[chosen], {chosen}, True, "field_absent_constraint_reselected_from_conflict_fields"
+        chosen = _choose_present_field_by_prompt(feat, present)
+        if chosen:
+            return FIELD_TO_TYPE[chosen], {chosen}, True, "field_absent_constraint_reselected_from_present_fields"
+        return UNCERTAIN_TYPE, {"evidence_insufficient"}, True, "field_absent_constraint_no_valid_field"
+    if primary and primary in present:
+        # For a single-field mismatch label, keep the conflict field aligned
+        # with the label.  A multilabel field head can be noisy; the demo JSON
+        # should not say "location mismatch" while listing only "entity".
+        final_fields = {primary}
+        applied = original_fields != final_fields or bool(invalid_conflicts)
+        return mismatch_type, final_fields, applied, "single_type_primary_field_enforced" if applied else "no_change"
+
+    if mismatch_type == "different-event mismatch":
+        # Keep only fields that are present in the caption.  A broad
+        # different-event label needs at least two present conflict fields;
+        # otherwise degrade to the corresponding single-field type.
+        if len(valid_conflicts) >= 2:
+            return mismatch_type, valid_conflicts, bool(invalid_conflicts), (
+                "removed_absent_conflict_fields" if invalid_conflicts else "no_change"
+            )
+        if len(valid_conflicts) == 1:
+            chosen = next(iter(valid_conflicts))
+            return FIELD_TO_TYPE.get(chosen, mismatch_type), {chosen}, True, "different_event_degraded_to_present_field"
+        chosen = _choose_present_field_by_prompt(feat, present)
+        if chosen:
+            return FIELD_TO_TYPE[chosen], {chosen}, True, "different_event_reselected_from_present_fields"
+        return UNCERTAIN_TYPE, {"evidence_insufficient"}, True, "different_event_no_valid_field"
+
+    if invalid_conflicts:
+        return mismatch_type, valid_conflicts, True, "removed_absent_conflict_fields"
+
+    return mismatch_type, conflict_fields, False, "no_change"
 
 
 def predict_with_model(feat: Dict[str, Any], model_path: Path) -> Optional[Tuple[str, Set[str], float, Dict[str, Any]]]:
@@ -173,7 +293,7 @@ def predict(
     no_clip: bool = False,
 ) -> Dict[str, Any]:
     feat = build_feature_row(image_path, caption, vdt_score=vdt_score, clip_model=clip_model, device=device, no_clip=no_clip)
-    if str(vdt_label).strip().lower() in {"non-ooc", "non_ooc", "non ooc", "benign"}:
+    if _is_non_ooc_label(vdt_label):
         mismatch_type = "benign illustrative image"
         conflict_fields: Set[str] = set()
         confidence = float(vdt_score)
@@ -190,10 +310,17 @@ def predict(
             source = "no_true_context_attr_head"
             model_meta["model_loaded"] = True
 
+    mismatch_type, conflict_fields, postprocess_applied, postprocess_reason = postprocess_prediction(
+        mismatch_type=mismatch_type,
+        conflict_fields=conflict_fields,
+        vdt_label=vdt_label,
+        feat=feat,
+    )
+
     evidence_status = "visually_grounded" if feat.get("image_loaded") and feat.get("clip_enabled") else "uncertain"
     if mismatch_type == "benign illustrative image":
         explanation = "VDT-CF-Attr 未发现明确字段错配，或 VDT 主分类为 Non-OOC。"
-    elif mismatch_type == "uncertain / evidence insufficient":
+    elif mismatch_type == UNCERTAIN_TYPE:
         explanation = "图片或视觉语言特征不足，系统不强行解释具体错配类型。"
     else:
         explanation = f"VDT 判断为 {vdt_label}；VDT-CF-Attr 在不使用 true context 的条件下预测主要错配类型为 {mismatch_type}，冲突字段为 {', '.join(sorted(conflict_fields)) or 'unknown'}。"
@@ -207,6 +334,8 @@ def predict(
         "evidence_status": evidence_status,
         "uses_true_context": False,
         "decision_source": source,
+        "postprocess_applied": bool(postprocess_applied),
+        "postprocess_reason": postprocess_reason,
         "caption": caption,
         "image_path": image_path,
         "feature_summary": {

@@ -139,6 +139,18 @@ def main() -> None:
     else:
         rows.append("| image-caption attr head | False | 待跑 | 待测 | 待测 | 待测 | 待测 |\n\n")
 
+    ntc_scaling = read_csv_rows("outputs/no_true_context_scaling_results.csv")
+    rows.append("## Table 12. No-true-context attribution scaling curve\n")
+    rows.append("| MaxPerType | Method | Train | Test | Type Acc | Field Micro-F1 | Exact Match | Counts none/location/time/entity | Leakage |\n|---:|---|---:|---:|---:|---:|---:|---|---|\n")
+    if ntc_scaling:
+        for r in ntc_scaling:
+            counts = f"{r.get('none_count','')}/{r.get('location_swap_count','')}/{r.get('time_swap_count','')}/{r.get('entity_swap_count','')}"
+            leakage = f"{r.get('source_sample_id_leakage','')}/{r.get('image_id_leakage','')}/{r.get('text_id_leakage','')}/{r.get('cross_split_duplicate_edited_caption','')}"
+            rows.append(f"| {r.get('max_per_type', '')} | {r.get('method', '')} | {r.get('train_rows', '')} | {r.get('test_rows', '')} | {float(r.get('type_acc') or 0):.4f} | {float(r.get('field_micro_f1') or 0):.4f} | {float(r.get('exact_match') or 0):.4f} | {counts} | {leakage} |\n")
+        rows.append("\n")
+    else:
+        rows.append("| 80/200/1000 | 待跑 | 待跑 | 待跑 | 待测 | 待测 | 待测 | 待统计 | 待查 |\n\n")
+
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("".join(rows), encoding="utf-8")
