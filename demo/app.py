@@ -248,27 +248,11 @@ CUSTOM_CSS = """
 .hero .kicker { color: var(--brand); letter-spacing: .12em; text-transform: uppercase; font-size: 12px; font-weight: 700; }
 .hero h1 { font-size: clamp(34px, 5vw, 64px); line-height: 1.04; margin: 8px 0 14px; color: var(--text); }
 .hero p { max-width: 760px; color: var(--muted); font-size: 16px; line-height: 1.7; }
-.input-panel {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 28px;
-  padding: 24px;
-  backdrop-filter: blur(22px);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, .30);
-}
+.input-panel { background: var(--card); border: 1px solid var(--line); border-radius: 28px; padding: 24px; backdrop-filter: blur(22px); box-shadow: 0 24px 80px rgba(0, 0, 0, .30); }
 .input-panel label, .input-panel .label-wrap span { color: var(--text) !important; }
 .input-panel textarea, .input-panel input { background: rgba(15, 23, 42, .64) !important; color: var(--text) !important; border-color: var(--line) !important; }
 #run-btn { border-radius: 999px !important; min-height: 48px; font-weight: 800; background: linear-gradient(135deg, var(--brand), var(--brand2)) !important; color: #05111f !important; border: 0 !important; }
-.result-card {
-  margin-top: 24px;
-  background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.075));
-  border: 1px solid var(--line);
-  border-radius: 30px;
-  padding: 28px;
-  color: var(--text);
-  box-shadow: 0 30px 90px rgba(0,0,0,.34);
-  backdrop-filter: blur(26px);
-}
+.result-card { margin-top: 24px; background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.075)); border: 1px solid var(--line); border-radius: 30px; padding: 28px; color: var(--text); box-shadow: 0 30px 90px rgba(0,0,0,.34); backdrop-filter: blur(26px); }
 .card-topline { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 22px; }
 .eyebrow { color: var(--brand); letter-spacing: .10em; font-size: 11px; text-transform: uppercase; font-weight: 800; margin: 0 0 8px; }
 .result-card h2 { margin: 0; font-size: 26px; color: var(--text); }
@@ -308,7 +292,7 @@ footer { color: var(--muted); text-align: center; margin-top: 24px; font-size: 1
 
 
 def build_app():
-    with gr.Blocks(title="VDT-CF-Attr", css=CUSTOM_CSS, theme=gr.themes.Base()) as app:
+    with gr.Blocks(title="VDT-CF-Attr") as app:
         with gr.Column(elem_id="main-shell"):
             gr.HTML(
                 """
@@ -333,12 +317,19 @@ def build_app():
     return app
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", "7860"))
-    host = os.environ.get("HOST", "127.0.0.1")
+def _pick_port(host: str, preferred: int) -> int:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((host, port))
+            s.bind((host, preferred))
+            return preferred
     except OSError:
-        port = 0
-    build_app().launch(server_name=host, server_port=port)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((host, 0))
+            return int(s.getsockname()[1])
+
+
+if __name__ == "__main__":
+    preferred_port = int(os.environ.get("PORT", "7860"))
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = _pick_port(host, preferred_port)
+    build_app().launch(server_name=host, server_port=port, css=CUSTOM_CSS, theme=gr.themes.Base())
