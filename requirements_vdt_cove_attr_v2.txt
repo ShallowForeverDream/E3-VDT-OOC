@@ -6,5 +6,6 @@ transformers
 sentencepiece
 protobuf
 spacy
+openpyxl
 # Optional: python -m spacy download en_core_web_sm
 # Optional for local time parsing extension: dateparser
