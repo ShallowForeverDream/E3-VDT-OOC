@@ -1,204 +1,237 @@
-# 期末报告初稿：基于事件语境与证据约束的跨域图文内容挪用检测系统
+# 期末报告初稿：VDT-COVE-Attr 跨域图文内容挪用检测与错配归因系统
 
-> 用途：报告负责人可直接以此为正文初稿，再按课程模板调整格式、插入图表和参考文献。
+> 用途：报告负责人按课程模板排版。本文档为当前最终研究口径，不再使用“E3-VDT Full 显著提升分类指标”的旧表述。
 
 ## 摘要
 
-跨域图文内容挪用（Out-of-Context, OOC）是指真实图像被放入错误新闻语境中传播，造成误导性叙事。相比传统篡改检测，OOC 内容通常不修改图像像素，而是通过文本、时间、地点或事件语境错配制造虚假信息，因此更难依靠低层视觉伪造痕迹发现。
+新闻场景中的 Out-of-Context（OOC）图文内容挪用通常不修改图像像素，而是将真实图片放入错误文本语境中，造成误导性叙事。针对该问题，本项目首先复现 VDT 作为跨域 OOC 二分类 baseline，在 NewsCLIPpings / VisualNews strict BLIP-2/GaussianBlur 设置下完成两组核心实验：`target_domain=bbc,guardian` 得到 `F1=0.7353`、`Acc=0.7383`、`AUC=0.7398`；`target_domain=usa_today,washington_post` 在 RTX 4060 Laptop 显存约束下降 batch size 至 64，得到 `F1=0.8032`、`Acc=0.8032`、`AUC=0.8028`。
 
-本项目围绕新闻场景下的图文内容挪用检测，首先在 NewsCLIPpings / VisualNews 数据上复现 VDT baseline，并完成 strict BLIP-2/GaussianBlur 设置下的特征预处理和跨域训练。在 `target_domain=bbc,guardian` 设置下，复现得到 `F1=0.7353`、`Acc=0.7383`、`AUC=0.7398`；在 `target_domain=usa_today,washington_post` 且 batch size 降为 64 的设置下，复现得到 `F1=0.8032`、`Acc=0.8032`、`AUC=0.8028`。在此基础上，我们提出 E3-VDT（Event-grounded and Explanation-enhanced VDT）系统路线：在不降低 VDT 主分类准确率的前提下，以 sidecar 方式增加事件字段一致性建模，输出 `mismatch_type`、`conflict_fields`、`event_scores` 和结构化解释，使系统不仅判断“是否错配”，还能回答“哪里错、为什么错、属于哪类错配”。
+VDT 能判断图文对是否 OOC，但不输出错配原因。为弥补这一不足，本项目提出 **VDT-COVE-Attr**：在不覆盖 VDT 主分类结果的前提下，借鉴 COVE 的 context-first 思路，用 VisualNews 原始上下文构造图像真实语境（true image context），再比较当前 caption 与真实上下文中的 `entity/location/time/event_type/relation` 五类事件字段，输出 `mismatch_type`、`conflict_fields`、`event_scores` 和结构化解释。为避免将规则输出直接包装成真值，本项目进一步设计人工归因评测协议，以 `mismatch_type_accuracy`、`conflict_field_micro_f1`、`macro_f1` 和 `exact_match_rate` 验证解释是否优于 majority、sampled、text-only 等简单 baseline。
 
-实验与系统实现表明，VDT 可以作为有效二分类 baseline，而 E3-VDT 的主要贡献在于提升内容安全审核场景中的可解释性、可诊断性和演示可用性。项目最终提供可运行 Gradio 展示系统、统一 JSON 输出 schema、复现实验日志和答辩样例。
+本项目的贡献不是提出新的主分类 SOTA，而是完成 VDT baseline 复现，并将其二分类输出扩展为可解释、可评测、可展示的内容安全审核系统。
 
 ## 1. 引言
 
-社交媒体和新闻传播中，大量虚假信息并非来自图像本身的像素篡改，而是来自图文语境错配。例如，一张旧抗议现场图片可能被描述为近期另一个国家的事件；一张灾害现场图片可能被用于错误城市或错误年份。这类内容具有两个特点：
+OOC 图文挪用的风险在于：图像本身真实，文本也可能局部合理，但二者组合后指向错误事件。传统图像篡改检测难以发现这类问题；普通图文相似度也可能被同主题不同事件误导。因此，内容安全系统不仅需要判断是否 OOC，还需要回答“错在哪里、依据是什么”。
 
-1. 图像往往是真实的，传统篡改检测难以发现；
-2. 文本和图像在主题上可能高度相似，简单图文相似度模型容易被误导。
-
-因此，OOC 检测需要同时理解图像、文本和事件语境。本项目选择 VDT 作为主 baseline，复现其跨域 OOC 检测能力，并进一步面向内容安全审核需求加入事件字段归因。
+本项目以 VDT 为主 baseline，复现其跨域 OOC 检测流程；随后在 VDT 之外增加 context-grounded attribution 模块，面向人工审核输出可解释字段。
 
 ## 2. 相关工作
 
-### 2.1 NewsCLIPpings 与 OOC 数据集
+### 2.1 VDT：跨域 OOC 检测 baseline
 
-NewsCLIPpings 基于 VisualNews 构造图文匹配与错配样本，是新闻 OOC 检测的重要数据集。其优点是规模较大、适合跨域实验；不足是主要提供二分类标签，缺少细粒度错配类型标注，例如地点错配、时间错配、主体错配等。
+VDT 通过变分域不变表示和测试时训练增强 NewsCLIPpings 中跨新闻机构域的泛化能力。它适合作为 OOC 二分类 baseline，但不输出细粒度错配字段。因此本项目将 VDT 用作主分类模块，而不是把解释模块混入 VDT 主分类。
 
-### 2.2 VDT baseline
+### 2.2 SNIFFER：解释需要外部上下文和证据
 
-VDT 关注跨域图文错配检测，利用视觉语言特征和 domain adaptation 思路提升跨域泛化能力。该方法适合作为本项目的核心二分类 baseline。本项目在本机复现 VDT strict BLIP-2/GaussianBlur 流程，并记录硬件约束下的 batch size 调整。
+SNIFFER 使用多模态大模型、指令微调和外部检索证据进行 explainable OOC detection。它说明 OOC 解释不能只依赖分类分数，而需要上下文或证据支撑。受限于课程项目算力，本项目不完整复现 SNIFFER，而是吸收其“contextual verification”思想。
 
-### 2.3 可解释 OOC 检测需求
+### 2.3 COVE：先恢复图像真实上下文，再判断 caption
 
-对于内容安全系统，仅输出 OOC / Non-OOC 往往不足。审核人员更需要知道冲突来自人物、地点、时间、事件类型还是行为关系。因此，本项目将可解释输出作为系统创新点，而不是单纯追求模型分数微小提升。
+COVE 将 OOC 验证拆成 true context prediction 与 caption veracity prediction。该思路最适合本项目适配：在 NewsCLIPpings / VisualNews 中，我们可以用 VisualNews 原始 caption/title/article metadata 作为 true image context，形成 COVE-lite。
 
-## 3. 方法设计
+### 2.4 MUSE：similarity shortcut 警告
 
-## 3.1 总体框架
+MUSE 表明简单相似度特征可能在 OOC benchmark 上取得很强表现，因此不能只用总体 Accuracy/F1 证明模型真正理解事实一致性。本项目通过 hard negative 与人工归因评测检验解释模块是否只是相似度 shortcut。
 
-E3-VDT 采用 accuracy-preserving 设计：
+### 2.5 AMG 与归因评测
+
+多模态假新闻数据集通常只有二分类标签，缺少细粒度 attribution labels。AMG 类工作说明，若要声称解释有效，必须构造归因标签和评测协议。因此本项目新增人工 attribution set，用字段级 F1 验证解释可靠性。
+
+## 3. 方法：VDT-COVE-Attr
+
+### 3.1 总体结构
 
 ```text
-VDT baseline -> OOC / Non-OOC 主分类结果
-Event sidecar -> mismatch_type / conflict_fields / event_scores / explanation
+Input image-caption pair
+        |
+        v
+VDT baseline -> OOC / Non-OOC + confidence
+        |
+        v
+COVE-lite true context recovery
+        |
+        v
+Event-field attribution sidecar
+        |
+        v
+mismatch_type + conflict_fields + event_scores + explanation
 ```
 
-默认情况下：
+### 3.2 Accuracy-preserving 主分类策略
+
+正式策略中：
 
 ```text
 final_label = vdt_label
 final_score = vdt_score
 ```
 
-事件字段模块不覆盖主分类结果，因此分类 Accuracy / F1 与 VDT baseline 持平；系统额外获得结构化解释能力。只有当验证集证明融合策略不降低 Accuracy/F1 时，才允许事件分数参与最终分类。
+解释模块不覆盖 VDT 主分类，因此分类 Accuracy/F1 与 VDT baseline 持平。只有后续验证集证明融合事件分数不降低指标，才可尝试 guarded fusion；当前不把 fusion 作为已完成贡献。
 
-## 3.2 事件字段一致性建模
+### 3.3 COVE-lite 图像真实上下文构造
 
-我们将图文语境拆成五个事件字段：
+对每个 NewsCLIPpings 样本，根据 `image_id` 在 VisualNews metadata 中寻找图像原始上下文：
 
-| 字段 | 含义 | 示例 |
-|---|---|---|
-| entity | 人物、组织、主体 | Obama / Elon Musk |
-| location | 地点 | Paris / London |
-| time | 时间 | 2024 / Monday |
-| event_type | 事件类型 | protest / disaster / sports |
-| relation | 行为关系 | attack / meet / rescue |
+```text
+image_id -> VisualNews original caption/title/article metadata -> true_image_context
+```
 
-形成事件一致性向量：
+构造输出：
+
+```json
+{
+  "sample_id": "...",
+  "image_id": "...",
+  "current_caption": "...",
+  "true_image_context": "...",
+  "label": 1,
+  "domain": "bbc"
+}
+```
+
+这一步将解释从“手填图片描述”升级为“基于图像真实上下文的证据 grounding”。
+
+### 3.4 事件字段抽取与归因
+
+分别从 current caption 和 true image context 中抽取：
+
+```text
+entity / location / time / event_type / relation
+```
+
+计算字段一致性：
 
 ```text
 C_event = [s_entity, s_location, s_time, s_event_type, s_relation]
 ```
 
-当某个字段一致性显著低时，系统输出对应冲突字段。
+若某字段一致性低于阈值，则输出为 `conflict_fields`。主错配类型由冲突字段映射得到：
 
-## 3.3 弱监督错配类型构造
-
-由于现有数据集通常缺少细粒度错配标签，我们设计弱监督构造规则：
-
-| 标签 | 触发条件 |
+| 字段 | 错配类型 |
 |---|---|
-| entity mismatch | 主体实体冲突 |
-| location mismatch | 地点冲突 |
-| temporal mismatch | 时间冲突 |
-| event-type mismatch | 事件类型冲突 |
-| relation mismatch | 动作关系冲突 |
-| context omission | 证据不足或上下文缺失 |
+| entity | entity mismatch |
+| location | location mismatch |
+| time | temporal mismatch |
+| event_type | event-type mismatch |
+| relation | relation mismatch |
 
-该标签既可用于系统展示，也可作为后续训练 attribution head 的弱监督信号。
+### 3.5 RED-DOT-lite 证据相关性思想
 
-## 3.4 结构化输出 schema
-
-系统输出统一 JSON：
-
-```json
-{
-  "label": "OOC",
-  "confidence": 0.85,
-  "mismatch_type": "location mismatch",
-  "conflict_fields": ["location"],
-  "event_scores": {
-    "entity": 0.5,
-    "location": 0.0,
-    "time": 1.0,
-    "event_type": 1.0,
-    "relation": 1.0
-  },
-  "explanation": "地点字段冲突：文本为 Paris，图像上下文为 London。"
-}
-```
-
-相比 VDT baseline，该输出更适合内容审核和答辩展示。
+外部上下文也可能缺失或无关。本项目的轻量处理是：若 true image context 缺失、字段抽取不足或关键字段均无法比较，则输出 `uncertain / evidence insufficient`，而不是强行生成解释。后续可以加入更完整的 evidence relevance scoring。
 
 ## 4. 实验设计
 
-## 4.1 数据与设置
-
-- 数据集：NewsCLIPpings / VisualNews
-- 特征设置：strict BLIP-2 / GaussianBlur
-- 复现模型：VDT baseline
-- 指标：Accuracy、F1、AUC、F1-real、F1-fake、EER
-- 硬件：NVIDIA GeForce RTX 4060 Laptop GPU
-
-## 4.2 VDT baseline 复现结果
+### 4.1 VDT baseline 复现
 
 | 设置 | 状态 | F1 | Acc | AUC | 说明 |
 |---|---|---:|---:|---:|---|
-| `target_domain=bbc,guardian`, bs128 | completed | 0.7353 | 0.7383 | 0.7398 | bs256 CUBLAS 失败，bs128 跑通 |
-| `target_domain=usa_today,washington_post`, bs128 | failed_oom | - | - | - | Epoch 1 中途 CUDA OOM |
-| `target_domain=usa_today,washington_post`, bs64 | completed | 0.8032 | 0.8032 | 0.8028 | 已完成 13 个 validation blocks，best-by-F1 来自第 9 个 validation block |
+| `bbc,guardian`, bs128 | completed | 0.7353 | 0.7383 | 0.7398 | bs256/CUBLAS 不稳定后降到 bs128 |
+| `usa_today,washington_post`, bs128 | failed_oom | - | - | - | 显存不足，保留失败日志 |
+| `usa_today,washington_post`, bs64 | completed | 0.8032 | 0.8032 | 0.8028 | 本机可复现设置 |
 
-说明：两组 completed 结果均来自训练结束后 `train_stdout.log` 的 best-by-F1 解析；bs128 OOM 记录为本机硬件约束下的复现偏差。
+准确表述：完成 VDT strict BLIP-2/GaussianBlur 核心设置下两组跨域 baseline 复现，不夸大为完整复现论文全部实验。
 
-## 4.3 E3-VDT 与 baseline 对比方式
+### 4.2 COVE-lite coverage 实验
 
-由于本项目要求分类准确率不能降低，我们采用分层评价：
+运行脚本：
 
-| 层级 | VDT baseline | E3-VDT sidecar | 目标 |
-|---|---|---|---|
-| 分类层 | OOC / Non-OOC | 沿用 VDT 结果 | Accuracy / F1 持平 |
-| 归因层 | 无结构化输出 | mismatch type + conflict fields | 显著增强 |
-| 解释层 | 弱解释 | event scores + explanation | 更适合审核 |
+```powershell
+.\scripts\run_cove_lite_attribution_experiments.ps1 `
+  -NewsClippingsDataDir D:\MY_PROJECT\OOC\datasets\NewsCLIPpings_repo\news_clippings\data `
+  -VisualNewsMetadataDir E:\OOC_Datasets\VisualNews\articles_metadata `
+  -MaxRecords 500 `
+  -EvalSampleN 50
+```
 
-因此，E3-VDT 的主要提升不是牺牲分类性能换解释，而是在分类指标持平的前提下增加可解释输出。
+报告：
 
-## 4.4 Hard Negative 分析
+```text
+total samples
+kept samples
+coverage = kept / total
+missing_text
+missing_true_context
+```
 
-我们设计以下高相似错配样例：
+### 4.3 人工归因评测
 
-| 类型 | 示例 | 预期输出 |
-|---|---|---|
-| same-topic different-location | Paris protest vs London protest | location mismatch |
-| same-location different-event | Paris hospital vs Paris football match | event-type mismatch |
-| same-person different-time | 同一人物不同年份 | temporal mismatch |
-| same-domain multi-field | fire in New York vs football in London 2019 | multi-field conflict |
+人工标注文件：
 
-这些样例用于证明系统能诊断错配原因，而不是只给一个二分类标签。
+```text
+examples/attribution_eval_set.jsonl
+```
+
+每条标注：
+
+```json
+{
+  "gold_mismatch_type": "location mismatch",
+  "gold_conflict_fields": ["location"],
+  "rationale": "...",
+  "annotation_status": "done"
+}
+```
+
+### 4.4 Baseline 对比
+
+| 方法 | 说明 |
+|---|---|
+| majority | 永远预测最常见类型 |
+| sampled | 随机采样类型 |
+| text-only | 不看 true context，只输出证据不足 |
+| COVE-lite event rule | current caption vs true context 字段比较 |
+
+指标：
+
+```text
+mismatch_type_accuracy
+conflict_field_micro_f1
+conflict_field_macro_f1
+exact_match_rate
+```
+
+只有当 COVE-lite event rule 超过简单 baseline，才在报告中写成解释增强有效；否则必须写失败分析。
 
 ## 5. 系统实现
 
-系统采用 Gradio 实现，仓库中提供：
+仓库实现：
 
-- `demo/app.py`：网页展示系统
-- `src/e3vdt/inference/pipeline.py`：统一推理管线
-- `examples/demo_cases.jsonl`：演示样例
-- `examples/reproduction_metrics.json`：复现实验指标
-- `docs/OUTPUT_SCHEMA.md`：输出格式定义
+- `demo/app.py`：Gradio 展示系统；
+- `src/e3vdt/inference/pipeline.py`：统一推理管线；
+- `scripts/context/build_cove_lite_context_pairs.py`：COVE-lite 上下文构造；
+- `scripts/labels/build_weak_attribution_from_context.py`：弱归因标签；
+- `scripts/eval/build_attribution_eval_sample.py`：人工标注候选抽样；
+- `scripts/eval/run_attribution_baselines.py`：归因 baseline 评测；
+- `scripts/run_cove_lite_attribution_experiments.ps1`：本地一键实验脚本。
 
-网页端包含三个核心标签页：
+## 6. 结果与讨论
 
-1. OOC 检测演示：输入图片、文本和图像上下文，输出结构化判断；
-2. 分类不降验证：证明 sidecar 归因模块不会覆盖 VDT baseline 主分类；
-3. 复现实验指标：展示 VDT baseline 复现状态和指标。
+当前可以确定的结果：
 
-其中“分类不降验证”页会构造一个事件字段明显冲突的样例，同时输入 VDT baseline label。系统最终 `label` 严格继承 baseline，`decision_source` 标记为 `vdt_baseline`，从界面层面证明 accuracy-preserving 口径。
+1. VDT 两组核心复现已完成；
+2. VDT-COVE-Attr 系统结构已实现；
+3. 分类策略为 baseline-preserving，因此主分类指标不低于 VDT baseline；
+4. 解释模块的有效性必须等待人工归因评测结果支撑。
 
-## 6. 结果讨论
+因此，本项目现阶段不写“分类性能显著提升”，而写“在保持 VDT 分类结果的前提下增加 context-grounded attribution，并设计可验证实验协议”。
 
-当前 VDT baseline 已经在两组 domain 设置上完成 strict BLIP-2/GaussianBlur 流程复现，证明本项目不是仅做界面展示，而是完成了真实数据、特征预处理和模型训练。E3-VDT 的创新点主要体现在：
+## 7. 不足与后续工作
 
-1. 不降低分类准确率：默认沿用 VDT 主分类；
-2. 提供错配类型：从二分类扩展到细粒度归因；
-3. 输出冲突字段：支持内容安全审核定位问题；
-4. 支持 Hard Negative 诊断：更贴近真实传播场景。
+1. COVE-lite 依赖 VisualNews metadata，coverage 需要实际统计；
+2. 事件字段抽取仍是轻量规则，后续可接入更强 NER、OCR、captioning 或 LLM；
+3. 人工归因集规模有限，需要报告样本量限制；
+4. Evidence Gate、Event-Guided TTT 和 attribution head 训练属于扩展方向，当前不作为已完成主贡献。
 
-## 7. 不足与未来工作
-
-1. 当前展示系统中的事件抽取仍是轻量规则/heuristic，需要后续接入更强 NER、OCR、captioning 或多模态大模型；
-2. 受限于本机 GPU，复现实验没有覆盖论文全部 domain/超参数组合；
-3. 弱监督错配标签需要更多人工抽样校验；
-4. 若尝试 event score 与 VDT score 融合，必须通过验证集 gate，确保分类指标不下降。
-
-## 8. 成员贡献写法
+## 8. 成员分工
 
 | 角色 | 贡献 |
 |---|---|
-| 组长 | 项目统筹、VDT 复现、系统集成、GitHub 维护、答辩主线 |
+| 组长 | 路线设计、VDT 复现、系统集成、GitHub 维护、答辩主线 |
 | 复现负责人 | 数据准备、BLIP-2/GaussianBlur 预处理、VDT baseline 训练、指标整理 |
-| 系统负责人 | Gradio demo、推理接口、输出 schema、样例构造 |
-| 报告负责人 | 报告撰写、PPT 制作、文献整理、图表排版 |
+| 创新模块负责人 | COVE-lite 上下文构造、归因标签、人工评测集 |
+| 系统/报告负责人 | Gradio demo、报告/PPT、案例分析 |
 
-## 9. 结论
+## 9. 最终答辩口径
 
-本项目围绕 OOC 图文内容挪用检测，完成了 VDT baseline 的核心复现，并提出 accuracy-preserving 的 E3-VDT 系统路线。在不降低 OOC / Non-OOC 分类准确率的前提下，系统进一步输出错配类型、冲突字段、事件一致性分数和结构化解释，从而提升内容安全审核场景中的可解释性和可用性。
+> 我们完成了 VDT strict baseline 的核心复现。VDT 负责 OOC / Non-OOC 主分类。针对 VDT 不解释错配原因的问题，我们借鉴 COVE 的 context-first 思路，用 VisualNews 原始上下文构造图像真实语境，再比较 current caption 与 true context 的事件字段差异，输出 mismatch type 和 conflict fields。解释模块不覆盖 VDT 主分类，因此分类指标保持 baseline。解释是否有效通过人工归因集上的 field-F1 与 type accuracy 验证。
