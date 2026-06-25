@@ -49,7 +49,12 @@ class NLIPredictor:
             return self._pipe
         try:
             from transformers import pipeline  # type: ignore
-            self._pipe = pipeline("text-classification", model=self.model_name, device=self.device, return_all_scores=True)
+            # Newer transformers versions ignore/deprecate return_all_scores for
+            # some text-classification pipelines and may return only the top
+            # dict, which broke our old `res[0]` handling.  top_k=None asks for
+            # all labels in current versions; score() below still accepts older
+            # dict/list/list-of-list return shapes.
+            self._pipe = pipeline("text-classification", model=self.model_name, device=self.device, top_k=None)
         except Exception as e:  # pragma: no cover
             self._load_error = repr(e)
             self._pipe = None
@@ -76,11 +81,17 @@ class NLIPredictor:
                 out["_load_error"] = self._load_error
             return out
         try:
-            res = pipe({"text": premise, "text_pair": hypothesis})
-            if res and isinstance(res[0], list):
-                res = res[0]
+            res = pipe({"text": premise, "text_pair": hypothesis}, truncation=True)
+            if isinstance(res, dict):
+                items = [res]
+            elif isinstance(res, list) and res and isinstance(res[0], list):
+                items = res[0]
+            elif isinstance(res, list):
+                items = res
+            else:
+                items = []
             scores = {"entailment": 0.0, "neutral": 0.0, "contradiction": 0.0}
-            for item in res:
+            for item in items:
                 lab = str(item.get("label", "")).lower()
                 val = float(item.get("score", 0.0))
                 if "entail" in lab:
