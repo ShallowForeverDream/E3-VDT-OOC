@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from pathlib import Path
 from typing import Any, Dict
@@ -11,6 +12,14 @@ def read_json(path: str) -> Dict[str, Any]:
     if not p.exists():
         return {}
     return json.loads(p.read_text(encoding="utf-8"))
+
+
+def read_csv_rows(path: str):
+    p = Path(path)
+    if not p.exists():
+        return []
+    with p.open(encoding="utf-8-sig", newline="") as f:
+        return list(csv.DictReader(f))
 
 
 def main() -> None:
@@ -88,6 +97,47 @@ def main() -> None:
         rows.append("\n")
     else:
         rows.append("| majority/rule/NLI/attr_head | 待跑 | 待测 | 待测 | 待测 | 待测 |\n\n")
+
+    leak = read_json("outputs/counterfactual/leakage_check.json")
+    rows.append("## Table 8. Counterfactual split leakage audit\n")
+    rows.append("| Check | Value |\n|---|---:|\n")
+    if leak:
+        rows.append(f"| source_sample_id leakage | {leak.get('source_sample_id_leakage', 0)} |\n")
+        rows.append(f"| image_id leakage | {leak.get('image_id_leakage', 0)} |\n")
+        rows.append(f"| text_id leakage | {leak.get('text_id_leakage', 0)} |\n")
+        rows.append(f"| cross-split duplicate edited caption | {leak.get('cross_split_duplicate_edited_caption', 0)} |\n\n")
+    else:
+        rows.append("| leakage check | 待跑 |\n\n")
+
+    scaling = read_csv_rows("outputs/counterfactual_scaling_results.csv")
+    rows.append("## Table 9. Controlled counterfactual scaling curve\n")
+    rows.append("| MaxPerType | Method | Train | Test | Type Acc | Field Micro-F1 | Exact Match | Leakage | Transformers |\n|---:|---|---:|---:|---:|---:|---:|---:|---|\n")
+    if scaling:
+        for r in scaling:
+            rows.append(f"| {r.get('max_per_type', '')} | {r.get('method', '')} | {r.get('train_rows', '')} | {r.get('test_rows', '')} | {float(r.get('type_acc') or 0):.4f} | {float(r.get('field_micro_f1') or 0):.4f} | {float(r.get('exact_match') or 0):.4f} | {r.get('source_sample_id_leakage', '')}/{r.get('image_id_leakage', '')} | {r.get('used_transformers', '')} |\n")
+        rows.append("\n")
+    else:
+        rows.append("| 80/200/1000/3000 | 待跑 | 待跑 | 待跑 | 待跑 | 待跑 | 待跑 | 待跑 |\n\n")
+
+    real = read_json("outputs/real_ooc_attribution_eval_metrics.json")
+    rows.append("## Table 10. Manual real OOC attribution evaluation\n")
+    rows.append("| Method | Matched | Type Acc | Field Micro-F1 | Field Macro-F1 | Exact Match |\n|---|---:|---:|---:|---:|---:|\n")
+    if real and real.get("gold_records_done", 0):
+        for name, res in real.get("methods", {}).items():
+            rows.append(f"| {name} | {res.get('matched', 0)} | {res.get('mismatch_type_accuracy', 0):.4f} | {res.get('conflict_field_micro_f1', 0):.4f} | {res.get('conflict_field_macro_f1', 0):.4f} | {res.get('exact_match_rate', 0):.4f} |\n")
+        rows.append("\n")
+    else:
+        rows.append("| rule/NLI/counterfactual-trained attr head | 待人工标注 | 待测 | 待测 | 待测 | 待测 |\n\n")
+
+    ntc = read_json("outputs/no_true_context_attr/no_true_context_attr_metrics.json")
+    rows.append("## Table 11. No-true-context image+caption attribution head\n")
+    rows.append("| Method | Uses true context at inference? | N | Type Acc | Field Micro-F1 | Field Macro-F1 | Exact Match |\n|---|---|---:|---:|---:|---:|---:|\n")
+    if ntc:
+        for name, res in ntc.get("results", {}).items():
+            rows.append(f"| {name} | {ntc.get('uses_true_context_at_inference', False)} | {res.get('n', 0)} | {res.get('mismatch_type_accuracy', 0):.4f} | {res.get('conflict_field_micro_f1', 0):.4f} | {res.get('conflict_field_macro_f1', 0):.4f} | {res.get('exact_match_rate', 0):.4f} |\n")
+        rows.append("\n")
+    else:
+        rows.append("| image-caption attr head | False | 待跑 | 待测 | 待测 | 待测 | 待测 |\n\n")
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

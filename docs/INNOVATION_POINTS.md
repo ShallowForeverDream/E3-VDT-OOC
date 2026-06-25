@@ -56,7 +56,7 @@ Non-OOC 样本
 
 这部分贡献的准确表述是：**构造可控单字段错配的 attribution 训练/测试集**，不是声称原始 OOC 数据集已经自带细粒度原因标签。
 
-## 创新点 4：轻量 Attribution Head
+## 创新点 4：轻量 Attribution Head（oracle 特征版）
 
 在可控反事实数据上，我们训练一个轻量 MLP attribution head，输入不是原图，而是解释侧特征：
 
@@ -66,17 +66,59 @@ field-wise NLI scores
 + graph alignment features
 ```
 
-当前一次 `MaxPerType=80` 本地实验中，在可控反事实 test=41 上：
+当前一次 `MaxPerType=80` 本地实验中，修复泄漏后的 group split 在可控反事实 test=38 上：
 
 | Method | Type Acc | Field Micro-F1 | Exact Match |
 |---|---:|---:|---:|
-| majority | 0.2927 | 0.0000 | 0.2927 |
-| field-wise NLI | 0.6098 | 0.5714 | 0.6098 |
-| attribution head MLP | 0.9268 | 0.9474 | 0.9512 |
+| majority | 0.2368 | 0.2812 | 0.2368 |
+| field-wise NLI | 0.7632 | 0.7200 | 0.6579 |
+| attribution head MLP | 0.9474 | 0.9020 | 0.9211 |
+
+这次结果已经过泄漏检查：
+
+```text
+source_sample_id leakage = 0
+image_id leakage = 0
+text_id leakage = 0
+cross-split duplicate edited caption = 0
+```
 
 注意：这只证明在“可控单字段反事实测试集”上有效。真实 OOC 泛化仍需要人工标注集评测，不能夸大成所有真实样本都已经解决。
 
-## 创新点 5：Accuracy-preserving sidecar
+## 创新点 5：VDT-CF-Attr no-true-context 推理路线
+
+进一步修正后的最终应用路线是：
+
+```text
+训练阶段：
+Non-OOC image-caption pair
+  -> 单字段反事实编辑 caption
+  -> 得到 mismatch_type gold label
+
+推理阶段：
+image + current_caption + VDT score
+  -> image-caption attribution head
+  -> mismatch_type / conflict_fields
+```
+
+关键边界：
+
+```text
+true_image_context 只能用于构造训练标签和人工标注参考；
+不能作为最终推理阶段 attribution head 的必要输入。
+```
+
+当前已实现 `scripts/features/build_image_caption_attribution_features.py` 和 `scripts/train/train_no_true_context_attribution_head.py`。本地 `MaxPerType=80`、CLIP image+caption 特征、group split、test=38 的 no-true-context 结果：
+
+| Method | Uses true context at inference? | Type Acc | Field Micro-F1 | Exact Match |
+|---|---|---:|---:|---:|
+| field prompt grounding rule | False | 0.3421 | 0.3415 | 0.3947 |
+| logistic regression no-true-context | False | 0.4474 | 0.3939 | 0.2632 |
+| image+caption MLP attribution head | False | 0.4474 | 0.3500 | 0.4474 |
+
+这组结果低于 COVE-lite oracle attribution，是合理的：没有 true context 时，具体人物、地点、年份很多时候无法仅靠图像可靠判断。它反而更适合作为真实应用路线的诚实基线。
+
+## 创新点 6：Accuracy-preserving sidecar
 
 正式策略中：
 
@@ -87,7 +129,7 @@ final_score = vdt_score
 
 事件归因模块只输出解释，不修改主分类。因此分类 Accuracy/F1 与 VDT baseline 持平；新增的是可解释诊断能力。
 
-## 创新点 6：人工归因评测协议
+## 创新点 7：人工归因评测协议
 
 为了回答“你怎么知道解释是对的”，项目新增人工归因评测集和 baseline 对比：
 

@@ -7,5 +7,7 @@ sentencepiece
 protobuf
 spacy
 openpyxl
+Pillow
 # Optional: python -m spacy download en_core_web_sm
 # Optional for local time parsing extension: dateparser
+# Optional for no-true-context CLIP features: install torch separately for your CUDA/CPU environment

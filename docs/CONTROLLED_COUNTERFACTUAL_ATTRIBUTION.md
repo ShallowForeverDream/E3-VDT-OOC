@@ -76,14 +76,17 @@ outputs/counterfactual/controlled_counterfactual_val.jsonl
 outputs/counterfactual/controlled_counterfactual_test.jsonl
 outputs/counterfactual/controlled_counterfactual_*_events.jsonl
 outputs/counterfactual/controlled_counterfactual_*_features.jsonl
+outputs/counterfactual/leakage_check.json
 outputs/counterfactual/attribution_head_model.pkl
 outputs/counterfactual/attribution_head_metrics.json
+outputs/counterfactual_scaling_results.csv
 outputs/report_tables_v2.md
+examples/real_ooc_attribution_eval_candidates.xlsx
 ```
 
 ## 当前一次本地结果
 
-本地 `MaxPerType=80` 运行结果：
+本地 `MaxPerType=80`、按 `source_sample_id/image_id/text_id` group split 后的运行结果：
 
 | Edit type | Generated/kept |
 |---|---:|
@@ -96,19 +99,87 @@ outputs/report_tables_v2.md
 
 | Split | Rows |
 |---|---:|
-| train | 186 |
-| val | 40 |
-| test | 41 |
+| train | 188 |
+| val | 41 |
+| test | 38 |
+
+泄漏检查：
+
+| Check | Value |
+|---|---:|
+| source_sample_id leakage | 0 |
+| image_id leakage | 0 |
+| text_id leakage | 0 |
+| cross-split duplicate edited caption | 0 |
 
 归因测试集结果：
 
 | Method | N | Type Acc | Field Micro-F1 | Exact Match |
 |---|---:|---:|---:|---:|
-| majority | 41 | 0.2927 | 0.0000 | 0.2927 |
-| field-wise NLI | 41 | 0.6098 | 0.5714 | 0.6098 |
-| attribution head MLP | 41 | 0.9268 | 0.9474 | 0.9512 |
+| majority | 38 | 0.2368 | 0.2812 | 0.2368 |
+| field-wise NLI | 38 | 0.7632 | 0.7200 | 0.6579 |
+| attribution head MLP | 38 | 0.9474 | 0.9020 | 0.9211 |
 
-解释口径要谨慎：这证明 attribution head 在“可控单字段反事实测试集”上明显优于 majority 和直接 NLI baseline；它还不能单独证明真实 OOC 样本上的泛化效果。真实 OOC 泛化需要继续标注 `D:\MY_PROJECT\OOC\E3-VDT-OOC\examples\attribution_eval_candidates_annotate.xlsx` 并运行人工 gold set 评测。
+当前消融结论要如实表述：`w/o evidence` 下降明显，说明 evidence relevance 特征对当前任务有帮助；`w/o graph` 和 full MLP 接近，说明 graph-lite 对当前 entity/location/time 三类反事实贡献有限，后续更适合 relation/event 扩展任务。
+
+解释口径要谨慎：这证明 attribution head 在“可控单字段反事实测试集”上明显优于 majority 和直接 NLI baseline；它还不能单独证明真实 OOC 样本上的泛化效果。真实 OOC 泛化需要继续标注 `D:\MY_PROJECT\OOC\E3-VDT-OOC\examples\real_ooc_attribution_eval_candidates.xlsx` 并运行人工 gold set 评测。
+
+另外，以上是 COVE-lite oracle 特征版：训练/测试特征里包含 `current_caption vs true_image_context` 的 NLI 和 evidence/graph 特征。最终数据集外推理路线请看 `docs/VDT_CF_ATTR_NO_TRUE_CONTEXT.md`，该路线不把 true context 作为推理输入。
+
+## 泄漏检查与学习曲线
+
+检查当前默认输出：
+
+```powershell
+python scripts\eval\check_counterfactual_leakage.py `
+  --output outputs\counterfactual\leakage_check.json `
+  --fail-on-leak
+```
+
+跑学习曲线：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_counterfactual_scaling.ps1 `
+  -ProjectRoot D:\MY_PROJECT\OOC\E3-VDT-OOC `
+  -Python python `
+  -Sizes 80,200,1000,3000 `
+  -NliModel facebook/bart-large-mnli `
+  -NliDevice 0
+```
+
+注意：如果 `outputs/cove_lite_context_pairs.jsonl` 仍然只有 500 条，`MaxPerType=1000/3000` 会受候选池上限限制。正式跑大规模前应先用 `scripts/context/build_cove_lite_context_pairs.py` 生成更大的 COVE-lite 输入。
+
+## 真实 OOC 人工评测
+
+生成候选标注表：
+
+```powershell
+python scripts\eval\build_real_ooc_attribution_candidates.py `
+  --context-pairs outputs\cove_lite_context_pairs.jsonl `
+  --predictions outputs\field_nli_attribution_v2.jsonl `
+  --output examples\real_ooc_attribution_eval_candidates.jsonl `
+  --xlsx examples\real_ooc_attribution_eval_candidates.xlsx `
+  --n 80
+```
+
+人工标注完成后导入：
+
+```powershell
+python scripts\eval\import_attribution_xlsx.py `
+  --xlsx examples\real_ooc_attribution_eval_candidates.xlsx `
+  --output examples\real_ooc_attribution_eval_set.jsonl `
+  --done-only
+```
+
+然后评测真实 OOC 泛化：
+
+```powershell
+python scripts\eval\evaluate_real_ooc_attribution.py `
+  --gold examples\real_ooc_attribution_eval_set.jsonl `
+  --predictions outputs\field_nli_attribution_v2.jsonl `
+  --attr-head-model outputs\counterfactual\attribution_head_model.pkl `
+  --output outputs\real_ooc_attribution_eval_metrics.json
+```
 
 ## 答辩时怎么说
 

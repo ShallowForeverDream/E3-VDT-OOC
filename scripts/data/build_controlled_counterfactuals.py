@@ -228,7 +228,68 @@ def make_counterfactual(row: Dict[str, Any], span: Span, replacement: str, idx: 
     return out
 
 
+def split_by_group(rows: List[Dict[str, Any]], seed: int, train_ratio: float, val_ratio: float) -> Dict[str, List[Dict[str, Any]]]:
+    """Group split that prevents source_sample_id/image_id/text_id leakage.
+
+    We build connected components over all available identifiers.  If two rows
+    share any identifier, they are assigned to the same split.
+    """
+    rng = random.Random(seed)
+    parent: Dict[str, str] = {}
+
+    def find(x: str) -> str:
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a: str, b: str) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    row_nodes: List[List[str]] = []
+    for idx, r in enumerate(rows):
+        nodes = []
+        for prefix, key in [("src", "source_sample_id"), ("img", "image_id"), ("txt", "text_id")]:
+            val = str(r.get(key) or "").strip()
+            if val:
+                nodes.append(f"{prefix}:{val}")
+        if not nodes:
+            nodes = [f"row:{idx}"]
+        for node in nodes[1:]:
+            union(nodes[0], node)
+        row_nodes.append(nodes)
+
+    groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for r, nodes in zip(rows, row_nodes):
+        groups[find(nodes[0])].append(r)
+
+    keys = list(groups)
+    rng.shuffle(keys)
+    n_groups = len(keys)
+    n_train = int(n_groups * train_ratio)
+    n_val = int(n_groups * val_ratio)
+    split_keys = {
+        "train": set(keys[:n_train]),
+        "val": set(keys[n_train : n_train + n_val]),
+        "test": set(keys[n_train + n_val :]),
+    }
+    out = {"train": [], "val": [], "test": []}
+    for split, ks in split_keys.items():
+        for k in ks:
+            out[split].extend(groups[k])
+        rng.shuffle(out[split])
+    return out
+
+
 def split_by_type(rows: List[Dict[str, Any]], seed: int, train_ratio: float, val_ratio: float) -> Dict[str, List[Dict[str, Any]]]:
+    """Legacy row-level stratified split kept for reproducibility comparisons.
+
+    Do not use for final experiments because variants from one original sample
+    can cross train/val/test.  The default path uses split_by_group().
+    """
     rng = random.Random(seed)
     groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for r in rows:
@@ -256,6 +317,7 @@ def main() -> None:
     ap.add_argument("--spacy-model", default="en_core_web_sm")
     ap.add_argument("--train-ratio", type=float, default=0.70)
     ap.add_argument("--val-ratio", type=float, default=0.15)
+    ap.add_argument("--row-level-split", action="store_true", help="Legacy split; allows leakage and is only for ablation/debugging.")
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
@@ -311,7 +373,7 @@ def main() -> None:
         if all(target_counts[t] >= args.max_per_type for t in targets):
             break
 
-    splits = split_by_type(all_out, seed=args.seed, train_ratio=args.train_ratio, val_ratio=args.val_ratio)
+    splits = split_by_type(all_out, seed=args.seed, train_ratio=args.train_ratio, val_ratio=args.val_ratio) if args.row_level_split else split_by_group(all_out, seed=args.seed, train_ratio=args.train_ratio, val_ratio=args.val_ratio)
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     write_jsonl(out_dir / "controlled_counterfactual_all.jsonl", all_out)
@@ -323,7 +385,9 @@ def main() -> None:
     stats["kept"] = dict(stats["kept"])
     stats["skip_reasons"] = dict(stats["skip_reasons"])
     stats["split_counts"] = {k: len(v) for k, v in splits.items()}
+    stats["split_strategy"] = "row_level_by_type_legacy" if args.row_level_split else "group_by_source_sample_id_image_id"
     stats["type_counts"] = dict(Counter(r.get("edit_type") for r in all_out))
+    stats["split_type_counts"] = {split: dict(Counter(r.get("edit_type") for r in split_rows)) for split, split_rows in splits.items()}
     stats["keep_rate"] = {
         k: stats["kept"].get(k, 0) / max(1, stats["attempted"].get(k, stats["kept"].get(k, 0)))
         for k in ["location_swap", "time_swap", "entity_swap"]

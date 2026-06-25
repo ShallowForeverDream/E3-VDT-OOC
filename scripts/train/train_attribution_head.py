@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable, List, Sequence, Set, Tuple
 
 import numpy as np
 from sklearn.dummy import DummyClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import make_pipeline
@@ -54,38 +55,41 @@ def get_num(x: Any, default: float = 0.0) -> float:
         return default
 
 
-def feature_vector(row: Dict[str, Any]) -> List[float]:
+def feature_vector(row: Dict[str, Any], groups: Sequence[str] = ("nli", "evidence", "graph")) -> List[float]:
     out: List[float] = []
-    field_nli = row.get("field_nli") or {}
-    for field in ["entity", "location", "time", "event_type", "relation"]:
-        item = field_nli.get(field, {}) if isinstance(field_nli, dict) else {}
-        scores = item.get("scores", {}) if isinstance(item, dict) else {}
+    if "nli" in groups:
+        field_nli = row.get("field_nli") or {}
+        for field in ["entity", "location", "time", "event_type", "relation"]:
+            item = field_nli.get(field, {}) if isinstance(field_nli, dict) else {}
+            scores = item.get("scores", {}) if isinstance(item, dict) else {}
+            out.extend([
+                get_num(scores.get("entailment")),
+                get_num(scores.get("neutral")),
+                get_num(scores.get("contradiction")),
+            ])
+    if "evidence" in groups:
+        evidence = row.get("evidence_relevance") or {}
+        overlaps = evidence.get("field_overlaps", {}) if isinstance(evidence, dict) else {}
         out.extend([
-            get_num(scores.get("entailment")),
-            get_num(scores.get("neutral")),
-            get_num(scores.get("contradiction")),
+            get_num(evidence.get("evidence_relevance")),
+            get_num(evidence.get("text_similarity")),
+            get_num(overlaps.get("entity")),
+            get_num(overlaps.get("location")),
+            get_num(overlaps.get("time")),
+            get_num(overlaps.get("event_type")),
+            get_num(overlaps.get("relation")),
+            get_num(evidence.get("filled_true_fields")),
+            get_num(evidence.get("filled_current_fields")),
+            get_num(evidence.get("context_length")),
         ])
-    evidence = row.get("evidence_relevance") or {}
-    overlaps = evidence.get("field_overlaps", {}) if isinstance(evidence, dict) else {}
-    out.extend([
-        get_num(evidence.get("evidence_relevance")),
-        get_num(evidence.get("text_similarity")),
-        get_num(overlaps.get("entity")),
-        get_num(overlaps.get("location")),
-        get_num(overlaps.get("time")),
-        get_num(overlaps.get("event_type")),
-        get_num(overlaps.get("relation")),
-        get_num(evidence.get("filled_true_fields")),
-        get_num(evidence.get("filled_current_fields")),
-        get_num(evidence.get("context_length")),
-    ])
-    graph = row.get("graph_alignment") or {}
-    out.extend([
-        get_num(graph.get("graph_alignment_score")),
-        get_num(graph.get("num_current_edges")),
-        get_num(graph.get("num_true_edges")),
-        1.0 if "relation" in field_set(graph.get("graph_conflicts", [])) else 0.0,
-    ])
+    if "graph" in groups:
+        graph = row.get("graph_alignment") or {}
+        out.extend([
+            get_num(graph.get("graph_alignment_score")),
+            get_num(graph.get("num_current_edges")),
+            get_num(graph.get("num_true_edges")),
+            1.0 if "relation" in field_set(graph.get("graph_conflicts", [])) else 0.0,
+        ])
     return out
 
 
@@ -130,6 +134,87 @@ def type_to_field_set(t: str) -> Set[str]:
     return set(TYPE_TO_FIELDS.get(t, []))
 
 
+class SafeMultiOutputLogReg:
+    """Multi-output logistic regression that tolerates all-zero columns."""
+
+    def __init__(self, seed: int = 2026) -> None:
+        self.seed = seed
+        self.models: List[Any] = []
+
+    def fit(self, X: np.ndarray, Y: np.ndarray) -> "SafeMultiOutputLogReg":
+        self.models = []
+        for j in range(Y.shape[1]):
+            y = Y[:, j]
+            if len(set(y.tolist())) < 2:
+                model = DummyClassifier(strategy="constant", constant=int(y[0]) if len(y) else 0)
+            else:
+                model = LogisticRegression(max_iter=1000, class_weight="balanced", random_state=self.seed + j)
+            model.fit(X, y)
+            self.models.append(model)
+        return self
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        cols = [model.predict(X) for model in self.models]
+        return np.vstack(cols).T if cols else np.zeros((len(X), 0), dtype=int)
+
+
+def make_models(kind: str, seed: int) -> Tuple[Any, Any]:
+    if kind == "logreg":
+        type_model = make_pipeline(
+            StandardScaler(),
+            LogisticRegression(max_iter=1000, class_weight="balanced", random_state=seed),
+        )
+        field_model = make_pipeline(
+            StandardScaler(),
+            SafeMultiOutputLogReg(seed=seed + 1),
+        )
+        return type_model, field_model
+    if kind == "dummy":
+        return DummyClassifier(strategy="most_frequent"), DummyClassifier(strategy="most_frequent")
+    type_model = make_pipeline(
+        StandardScaler(),
+        MLPClassifier(hidden_layer_sizes=(64, 32), random_state=seed, max_iter=600, early_stopping=False),
+    )
+    field_model = make_pipeline(
+        StandardScaler(),
+        MLPClassifier(hidden_layer_sizes=(64, 32), random_state=seed + 1, max_iter=600, early_stopping=False),
+    )
+    return type_model, field_model
+
+
+def train_and_score_head(
+    train_rows: Sequence[Dict[str, Any]],
+    test_rows: Sequence[Dict[str, Any]],
+    groups: Sequence[str],
+    kind: str,
+    seed: int,
+) -> Tuple[Dict[str, float], Dict[str, Any]]:
+    X_train = np.array([feature_vector(r, groups=groups) for r in train_rows], dtype=float)
+    X_test = np.array([feature_vector(r, groups=groups) for r in test_rows], dtype=float)
+    y_type_train, y_fields_train = labels(train_rows)
+    y_type_test, y_fields_test = labels(test_rows)
+    type_encoder = LabelEncoder()
+    y_type_train_enc = type_encoder.fit_transform(y_type_train)
+    type_model, field_model = make_models(kind, seed)
+    type_model.fit(X_train, y_type_train_enc)
+    field_model.fit(X_train, y_fields_train)
+    type_pred = list(type_encoder.inverse_transform(type_model.predict(X_test)))
+    field_pred_arr = np.array(field_model.predict(X_test), dtype=int)
+    if field_pred_arr.ndim == 1:
+        field_pred_arr = field_pred_arr.reshape(-1, 1)
+    field_pred = [{FIELDS[j] for j, v in enumerate(row[: len(FIELDS)]) if v} for row in field_pred_arr]
+    bundle = {
+        "type_model": type_model,
+        "type_encoder": type_encoder,
+        "field_model": field_model,
+        "fields": FIELDS,
+        "type_to_fields": TYPE_TO_FIELDS,
+        "feature_groups": list(groups),
+        "head_kind": kind,
+    }
+    return score_predictions(y_type_test, y_fields_test, type_pred, field_pred), bundle
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Train a lightweight attribution head on controlled counterfactual features.")
     ap.add_argument("--train", required=True)
@@ -144,27 +229,8 @@ def main() -> None:
     val_rows = read_jsonl(Path(args.val))
     test_rows = read_jsonl(Path(args.test))
     train_all = train_rows + val_rows
-    X_train = np.array([feature_vector(r) for r in train_all], dtype=float)
-    X_test = np.array([feature_vector(r) for r in test_rows], dtype=float)
     y_type_train, y_fields_train = labels(train_all)
     y_type_test, y_fields_test = labels(test_rows)
-    type_encoder = LabelEncoder()
-    y_type_train_enc = type_encoder.fit_transform(y_type_train)
-
-    type_model = make_pipeline(
-        StandardScaler(),
-        MLPClassifier(hidden_layer_sizes=(64, 32), random_state=args.seed, max_iter=600, early_stopping=False),
-    )
-    field_model = make_pipeline(
-        StandardScaler(),
-        MLPClassifier(hidden_layer_sizes=(64, 32), random_state=args.seed + 1, max_iter=600, early_stopping=False),
-    )
-    type_model.fit(X_train, y_type_train_enc)
-    field_model.fit(X_train, y_fields_train)
-
-    type_pred = list(type_encoder.inverse_transform(type_model.predict(X_test)))
-    field_pred_arr = np.array(field_model.predict(X_test), dtype=int)
-    field_pred = [{FIELDS[j] for j, v in enumerate(row) if v} for row in field_pred_arr]
 
     majority = Counter(y_type_train).most_common(1)[0][0] if y_type_train else "benign illustrative image"
     majority_types = [majority for _ in test_rows]
@@ -172,32 +238,39 @@ def main() -> None:
     nli_types, nli_fields = predictions_from_rows(test_rows, "v2_mismatch_type", "v2_conflict_fields")
     weak_types, weak_fields = predictions_from_rows(test_rows, "weak_mismatch_type", "weak_conflict_fields")
 
-    results = {
+    results: Dict[str, Any] = {
         "majority": score_predictions(y_type_test, y_fields_test, majority_types, majority_fields),
         "field_wise_nli": score_predictions(y_type_test, y_fields_test, nli_types, nli_fields),
         "weak_rule_sidecar": score_predictions(y_type_test, y_fields_test, weak_types, weak_fields) if any(weak_types) else None,
-        "attr_head_mlp": score_predictions(y_type_test, y_fields_test, type_pred, field_pred),
     }
+    variants = {
+        "logistic_regression_head": (("nli", "evidence", "graph"), "logreg"),
+        "mlp_head_wo_nli": (("evidence", "graph"), "mlp"),
+        "mlp_head_wo_evidence": (("nli", "graph"), "mlp"),
+        "mlp_head_wo_graph": (("nli", "evidence"), "mlp"),
+        "attr_head_mlp": (("nli", "evidence", "graph"), "mlp"),
+    }
+    model_bundle: Dict[str, Any] = {}
+    for name, (groups, kind) in variants.items():
+        res, bundle = train_and_score_head(train_all, test_rows, groups=groups, kind=kind, seed=args.seed + len(name))
+        results[name] = res
+        if name == "attr_head_mlp":
+            model_bundle = bundle
     results = {k: v for k, v in results.items() if v is not None}
     metrics = {
         "train_rows": len(train_rows),
         "val_rows": len(val_rows),
         "test_rows": len(test_rows),
-        "feature_dim": int(X_train.shape[1]) if X_train.size else 0,
-        "type_classes": list(type_encoder.classes_),
+        "feature_dim": len(feature_vector(train_all[0])) if train_all else 0,
+        "type_classes": sorted(set(y_type_train)),
         "field_labels": FIELDS,
+        "ablation_variants": {k: {"feature_groups": list(v[0]), "head_kind": v[1]} for k, v in variants.items()},
         "results": results,
     }
     model_out = Path(args.model_out)
     model_out.parent.mkdir(parents=True, exist_ok=True)
     with model_out.open("wb") as f:
-        pickle.dump({
-            "type_model": type_model,
-            "type_encoder": type_encoder,
-            "field_model": field_model,
-            "fields": FIELDS,
-            "type_to_fields": TYPE_TO_FIELDS,
-        }, f)
+        pickle.dump(model_bundle, f)
     out = Path(args.metrics_out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")

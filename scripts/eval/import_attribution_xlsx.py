@@ -14,6 +14,7 @@ FIELD_COLUMNS = {
     "gold_time": "time",
     "gold_event_type": "event_type",
     "gold_relation": "relation",
+    "gold_global": "different_event",
     "gold_context_omission": "context_omission",
     "gold_evidence_insufficient": "evidence_insufficient",
 }
