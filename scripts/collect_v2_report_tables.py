@@ -141,15 +141,29 @@ def main() -> None:
 
     ntc_scaling = read_csv_rows("outputs/no_true_context_scaling_results.csv")
     rows.append("## Table 12. No-true-context attribution scaling curve\n")
-    rows.append("| MaxPerType | Method | Train | Test | Type Acc | Field Micro-F1 | Exact Match | Counts none/location/time/entity | Leakage |\n|---:|---|---:|---:|---:|---:|---:|---|---|\n")
+    rows.append("| MaxPerType | Method | Train | Test | Type Acc | Field Micro-F1 | Exact Match | Counts none/location/time/entity/different | Leakage |\n|---:|---|---:|---:|---:|---:|---:|---|---|\n")
     if ntc_scaling:
         for r in ntc_scaling:
-            counts = f"{r.get('none_count','')}/{r.get('location_swap_count','')}/{r.get('time_swap_count','')}/{r.get('entity_swap_count','')}"
+            counts = f"{r.get('none_count','')}/{r.get('location_swap_count','')}/{r.get('time_swap_count','')}/{r.get('entity_swap_count','')}/{r.get('different_event_count','0')}"
             leakage = f"{r.get('source_sample_id_leakage','')}/{r.get('image_id_leakage','')}/{r.get('text_id_leakage','')}/{r.get('cross_split_duplicate_edited_caption','')}"
             rows.append(f"| {r.get('max_per_type', '')} | {r.get('method', '')} | {r.get('train_rows', '')} | {r.get('test_rows', '')} | {float(r.get('type_acc') or 0):.4f} | {float(r.get('field_micro_f1') or 0):.4f} | {float(r.get('exact_match') or 0):.4f} | {counts} | {leakage} |\n")
         rows.append("\n")
     else:
         rows.append("| 80/200/1000 | 待跑 | 待跑 | 待跑 | 待测 | 待测 | 待测 | 待统计 | 待查 |\n\n")
+
+    ntc5 = read_json("outputs/no_true_context_attr_5way_1000/no_true_context_attr_metrics.json")
+    ntc5_stats = read_json("outputs/no_true_context_attr_5way_1000/counterfactual_generation_stats.json")
+    rows.append("## Table 13. No-true-context five-class attribution with filtered original OOC\n")
+    rows.append("| Method | Selected? | N | Type Acc | Field Micro-F1 | Exact Match | Counts none/location/time/entity/different |\n|---|---|---:|---:|---:|---:|---|\n")
+    if ntc5:
+        counts_obj = ntc5_stats.get("type_counts", {}) if ntc5_stats else {}
+        counts = f"{counts_obj.get('none',0)}/{counts_obj.get('location_swap',0)}/{counts_obj.get('time_swap',0)}/{counts_obj.get('entity_swap',0)}/{counts_obj.get('different_event_original_ooc',0)}"
+        selected = ntc5.get("selected_model_name", "")
+        for name, res in ntc5.get("results", {}).items():
+            rows.append(f"| {name} | {str(name == selected)} | {res.get('n', 0)} | {res.get('mismatch_type_accuracy', 0):.4f} | {res.get('conflict_field_micro_f1', 0):.4f} | {res.get('exact_match_rate', 0):.4f} | {counts} |\n")
+        rows.append("\n")
+    else:
+        rows.append("| five-class LR/MLP | 待跑 | 待跑 | 待测 | 待测 | 待测 | 待统计 |\n\n")
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

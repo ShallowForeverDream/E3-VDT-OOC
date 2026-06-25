@@ -88,6 +88,17 @@ def _load_no_true_context_examples():
 NO_TRUE_CONTEXT_EXAMPLES = _load_no_true_context_examples()
 
 
+def _default_no_true_context_model() -> str:
+    candidates = [
+        ROOT / "outputs/no_true_context_attr_5way_1000/no_true_context_attr_head.pkl",
+        ROOT / "outputs/no_true_context_attr/no_true_context_attr_head.pkl",
+    ]
+    for p in candidates:
+        if p.exists():
+            return str(p)
+    return str(candidates[-1])
+
+
 def _load_reproduction_metrics():
     path = ROOT / "examples" / "reproduction_metrics.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
@@ -218,7 +229,7 @@ def run_no_true_context_attr(image, caption: str, vdt_label: str, vdt_score: flo
         caption=caption or "",
         vdt_label=vdt_label or "OOC",
         vdt_score=float(vdt_score),
-        model_path=str(ROOT / "outputs/no_true_context_attr/no_true_context_attr_head.pkl"),
+        model_path=_default_no_true_context_model(),
         device=os.environ.get("VDT_CF_ATTR_DEVICE", "cuda"),
     )
     conflicts = ", ".join(obj.get("conflict_fields") or []) or "无明确冲突"

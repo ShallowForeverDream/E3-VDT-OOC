@@ -11,7 +11,11 @@ param(
     [string]$Device = "cuda",
     [int]$BatchSize = 16,
     [switch]$ReuseCounterfactual,
-    [switch]$NoClip
+    [switch]$NoClip,
+    [switch]$IncludeDifferentEvent,
+    [int]$MaxDifferentEvent = 0,
+    [double]$DifferentEventMaxSimilarity = 0.65,
+    [double]$DifferentEventMaxTokenJaccard = 0.08
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,12 +30,23 @@ function Run-Step {
 }
 
 if (-not $ReuseCounterfactual) {
-    Run-Step "[1/5] build controlled counterfactual data with group split" @(
+    $buildArgs = @(
         "scripts\data\build_controlled_counterfactuals.py",
         "--context-pairs", $ContextPairs,
         "--output-dir", $OutputDir,
         "--max-per-type", "$MaxPerType"
     )
+    if ($IncludeDifferentEvent) {
+        $effectiveMaxDifferent = $MaxDifferentEvent
+        if ($effectiveMaxDifferent -le 0) { $effectiveMaxDifferent = $MaxPerType }
+        $buildArgs += @(
+            "--include-original-ooc-different-event",
+            "--max-different-event", "$effectiveMaxDifferent",
+            "--different-event-max-similarity", "$DifferentEventMaxSimilarity",
+            "--different-event-max-token-jaccard", "$DifferentEventMaxTokenJaccard"
+        )
+    }
+    Run-Step "[1/5] build controlled counterfactual data with group split" $buildArgs
 } else {
     Write-Host "[1/5] reuse existing counterfactual jsonl in $OutputDir"
 }

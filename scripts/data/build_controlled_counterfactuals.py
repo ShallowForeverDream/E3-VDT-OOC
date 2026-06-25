@@ -24,6 +24,13 @@ except Exception:  # pragma: no cover
 YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 TITLE_PHRASE_RE = re.compile(r"\b[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,3}\b")
 DEFAULT_YEAR_POOL = [str(y) for y in range(2016, 2027)]
+STOPWORDS = {
+    "the", "a", "an", "in", "on", "at", "of", "to", "and", "or", "for", "with", "by", "from",
+    "as", "is", "are", "was", "were", "be", "been", "has", "have", "had", "this", "that",
+    "these", "those", "it", "its", "into", "after", "before", "during", "over", "under",
+    "across", "about", "more", "than", "not", "no", "but", "his", "her", "their", "our",
+    "your", "who", "which", "will", "would", "can", "could", "should", "may", "might",
+}
 
 LOCATION_LABELS = {"GPE", "LOC", "FAC"}
 ENTITY_LABELS = {"PERSON", "ORG", "NORP"}
@@ -58,6 +65,10 @@ def clean_space(s: str) -> str:
     return re.sub(r"\s+", " ", str(s or "")).strip()
 
 
+def token_count(text: str) -> int:
+    return len(re.findall(r"\w+", str(text or "")))
+
+
 def is_non_ooc(row: Dict[str, Any]) -> bool:
     label = row.get("label")
     if label == 0:
@@ -67,6 +78,67 @@ def is_non_ooc(row: Dict[str, Any]) -> bool:
     if isinstance(label, str):
         return label.strip().lower() in {"0", "false", "non-ooc", "non_ooc", "real", "match", "matched"}
     return False
+
+
+def is_ooc(row: Dict[str, Any]) -> bool:
+    return not is_non_ooc(row)
+
+
+def content_tokens(text: str) -> set:
+    return {
+        w.lower()
+        for w in re.findall(r"[A-Za-z0-9]+", str(text or ""))
+        if len(w) > 1 and w.lower() not in STOPWORDS
+    }
+
+
+def token_jaccard(a: str, b: str) -> float:
+    ta, tb = content_tokens(a), content_tokens(b)
+    if not ta and not tb:
+        return 0.0
+    return len(ta & tb) / max(1, len(ta | tb))
+
+
+_ANNOTATION_CACHE: Dict[str, Dict[Tuple[str, str], Dict[str, Any]]] = {}
+
+
+def annotation_for_row(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Recover the original NewsCLIPpings annotation for similarity_score.
+
+    cove_lite rows keep the source json path plus text/image ids, but not the
+    annotation similarity.  Loading is cached per json file and only used for
+    optional different-event filtering.
+    """
+    src = str(row.get("newsclippings_file") or "").strip()
+    if not src:
+        return None
+    if src not in _ANNOTATION_CACHE:
+        path = Path(src)
+        if not path.exists():
+            _ANNOTATION_CACHE[src] = {}
+        else:
+            try:
+                obj = json.loads(path.read_text(encoding="utf-8"))
+                _ANNOTATION_CACHE[src] = {
+                    (str(a.get("id")), str(a.get("image_id"))): a
+                    for a in obj.get("annotations", [])
+                    if isinstance(a, dict)
+                }
+            except Exception:
+                _ANNOTATION_CACHE[src] = {}
+    text_id = str(row.get("text_id") or row.get("sample_id") or "").strip()
+    image_id = str(row.get("image_id") or "").strip()
+    return _ANNOTATION_CACHE[src].get((text_id, image_id))
+
+
+def annotation_similarity(row: Dict[str, Any]) -> Optional[float]:
+    ann = annotation_for_row(row)
+    if not ann or ann.get("similarity_score") is None:
+        return None
+    try:
+        return float(ann.get("similarity_score"))
+    except Exception:
+        return None
 
 
 def load_spacy(model: str):
@@ -259,6 +331,75 @@ def make_counterfactual(row: Dict[str, Any], span: Span, replacement: str, idx: 
     return out
 
 
+def make_original_ooc_different_event(row: Dict[str, Any], idx: int, sim: Optional[float], jac: float) -> Dict[str, Any]:
+    base_id = str(row.get("sample_id") or row.get("id") or f"ooc_{idx}")
+    out = dict(row)
+    out.update({
+        "sample_id": f"{base_id}__orig_ooc_different_event",
+        "source_sample_id": f"orig_ooc:{base_id}",
+        "label": 1,
+        "gold_mismatch_type": "different-event mismatch",
+        "gold_conflict_fields": ["entity", "location", "event_type"],
+        "edit_type": "different_event_original_ooc",
+        "edited_field": "different_event",
+        "counterfactual_source": "original_ooc_filtered_low_similarity",
+        "validation": {
+            "original_ooc_falsified_pair": True,
+            "newsclippings_similarity_score": sim,
+            "caption_true_context_token_jaccard": jac,
+            "selection_rule": "OOC and low annotation similarity / low token overlap",
+        },
+    })
+    return out
+
+
+def select_original_ooc_different_events(
+    rows: List[Dict[str, Any]],
+    nlp,
+    rng: random.Random,
+    max_n: int,
+    max_similarity: float,
+    max_token_jaccard: float,
+    min_caption_tokens: int,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    selected: List[Dict[str, Any]] = []
+    stats: Dict[str, Any] = {
+        "requested": max_n,
+        "selected": 0,
+        "max_similarity": max_similarity,
+        "max_token_jaccard": max_token_jaccard,
+        "min_caption_tokens": min_caption_tokens,
+        "skip_reasons": Counter(),
+        "similarity_bins": Counter(),
+    }
+    candidates = [r for r in rows if is_ooc(r)]
+    rng.shuffle(candidates)
+    for idx, row in enumerate(candidates):
+        if len(selected) >= max_n:
+            break
+        cur = clean_space(row.get("current_caption") or "")
+        true_ctx = clean_space(row.get("true_image_context") or "")
+        if token_count(cur) < min_caption_tokens or token_count(true_ctx) < min_caption_tokens:
+            stats["skip_reasons"]["too_short"] += 1
+            continue
+        jac = token_jaccard(cur, true_ctx)
+        if jac > max_token_jaccard:
+            stats["skip_reasons"]["token_overlap_too_high"] += 1
+            continue
+        sim = annotation_similarity(row)
+        if sim is not None:
+            bin_key = f"{int(sim * 10) / 10:.1f}-{int(sim * 10) / 10 + 0.1:.1f}"
+            stats["similarity_bins"][bin_key] += 1
+            if sim > max_similarity:
+                stats["skip_reasons"]["similarity_too_high"] += 1
+                continue
+        selected.append(make_original_ooc_different_event(row, idx, sim, jac))
+    stats["selected"] = len(selected)
+    stats["skip_reasons"] = dict(stats["skip_reasons"])
+    stats["similarity_bins"] = dict(stats["similarity_bins"])
+    return selected, stats
+
+
 def split_by_group(rows: List[Dict[str, Any]], seed: int, train_ratio: float, val_ratio: float) -> Dict[str, List[Dict[str, Any]]]:
     """Group split that prevents source_sample_id/image_id/text_id leakage.
 
@@ -354,6 +495,13 @@ def main() -> None:
         default=6,
         help="Allow multiple YEAR->YEAR variants from one source row for time_swap. Group split keeps variants together.",
     )
+    ap.add_argument("--max-location-variants-per-source", type=int, default=2, help="Allow multiple location replacements from one source row when balancing large runs.")
+    ap.add_argument("--max-entity-variants-per-source", type=int, default=1, help="Allow multiple entity replacements from one source row when balancing large runs.")
+    ap.add_argument("--include-original-ooc-different-event", action="store_true", help="Add strictly filtered original OOC rows as different-event mismatch training examples.")
+    ap.add_argument("--max-different-event", type=int, default=0, help="Max original OOC different-event rows; default 0 means max-per-type.")
+    ap.add_argument("--different-event-max-similarity", type=float, default=0.65, help="Maximum NewsCLIPpings similarity_score for original OOC rows used as different-event.")
+    ap.add_argument("--different-event-max-token-jaccard", type=float, default=0.08, help="Maximum token Jaccard between caption and true context for different-event rows.")
+    ap.add_argument("--different-event-min-caption-tokens", type=int, default=4)
     ap.add_argument("--row-level-split", action="store_true", help="Legacy split; allows leakage and is only for ablation/debugging.")
     args = ap.parse_args()
 
@@ -371,6 +519,8 @@ def main() -> None:
         "non_ooc_input": len(non_ooc),
         "max_per_type": args.max_per_type,
         "max_time_variants_per_source": args.max_time_variants_per_source,
+        "max_location_variants_per_source": args.max_location_variants_per_source,
+        "max_entity_variants_per_source": args.max_entity_variants_per_source,
         "spacy_model_loaded": nlp is not None,
         "pool_sizes": {field: {k: len(v) for k, v in pool.items()} for field, pool in pools.items()},
         "default_year_pool": DEFAULT_YEAR_POOL,
@@ -401,7 +551,11 @@ def main() -> None:
                 stats["skip_reasons"][f"{target}:no_span"] += 1
                 continue
             rng.shuffle(target_spans)
-            row_variant_budget = args.max_time_variants_per_source if target == "time" else 1
+            row_variant_budget = {
+                "time": args.max_time_variants_per_source,
+                "location": args.max_location_variants_per_source,
+                "entity": args.max_entity_variants_per_source,
+            }.get(target, 1)
             row_variants_kept = 0
             row_any_replacement = False
             for span_idx, span in enumerate(target_spans):
@@ -428,6 +582,22 @@ def main() -> None:
                 stats["skip_reasons"][f"{target}:no_replacement"] += 1
         if all(target_counts[t] >= args.max_per_type for t in targets):
             break
+
+    if args.include_original_ooc_different_event:
+        max_diff = args.max_different_event if args.max_different_event > 0 else args.max_per_type
+        diff_rows, diff_stats = select_original_ooc_different_events(
+            rows=rows,
+            nlp=nlp,
+            rng=rng,
+            max_n=max_diff,
+            max_similarity=args.different_event_max_similarity,
+            max_token_jaccard=args.different_event_max_token_jaccard,
+            min_caption_tokens=args.different_event_min_caption_tokens,
+        )
+        all_out.extend(diff_rows)
+        stats["kept"]["different_event_original_ooc"] += len(diff_rows)
+        stats["attempted"]["different_event_original_ooc"] += diff_stats.get("selected", 0) + sum(diff_stats.get("skip_reasons", {}).values())
+        stats["different_event_original_ooc"] = diff_stats
 
     splits = split_by_type(all_out, seed=args.seed, train_ratio=args.train_ratio, val_ratio=args.val_ratio) if args.row_level_split else split_by_group(all_out, seed=args.seed, train_ratio=args.train_ratio, val_ratio=args.val_ratio)
     out_dir = Path(args.output_dir)

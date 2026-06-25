@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import pickle
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Set, Tuple
@@ -143,6 +144,11 @@ class SafeFieldLogReg:
         return np.vstack(cols).T if cols else np.zeros((len(X), 0), dtype=int)
 
 
+# Keep pickles loadable even when this file is executed as a script.
+SafeFieldLogReg.__module__ = "scripts.train.train_no_true_context_attribution_head"
+sys.modules.setdefault("scripts.train.train_no_true_context_attribution_head", sys.modules[__name__])
+
+
 def train_head(train_rows: Sequence[Dict[str, Any]], test_rows: Sequence[Dict[str, Any]], groups: Sequence[str], kind: str, seed: int) -> Tuple[Dict[str, float], Dict[str, Any]]:
     names = feature_names(train_rows, groups=groups)
     X_train = matrix(train_rows, names)
@@ -241,11 +247,26 @@ def main() -> None:
         "attr_head_image_caption_mlp": (("clip", "field", "vdt"), "mlp"),
     }
     bundle: Dict[str, Any] = {}
+    selected_model_name = ""
+    selected_score = (-1.0, -1.0, -1.0)
     for name, (groups, kind) in variants.items():
         res, b = train_head(train_all, test_rows, groups=groups, kind=kind, seed=args.seed + len(name))
         results[name] = res
-        if name == "attr_head_image_caption_mlp":
+        score = (
+            float(res.get("mismatch_type_accuracy", 0.0)),
+            float(res.get("conflict_field_micro_f1", 0.0)),
+            float(res.get("exact_match_rate", 0.0)),
+        )
+        if score > selected_score:
+            selected_score = score
+            selected_model_name = name
             bundle = b
+            bundle["selected_model_name"] = name
+            bundle["selected_model_score"] = {
+                "mismatch_type_accuracy": score[0],
+                "conflict_field_micro_f1": score[1],
+                "exact_match_rate": score[2],
+            }
 
     metrics = {
         "train_rows": len(train_rows),
@@ -254,6 +275,12 @@ def main() -> None:
         "uses_true_context_at_inference": False,
         "type_classes": sorted(set(y_type_train)),
         "field_labels": FIELDS,
+        "selected_model_name": selected_model_name,
+        "selected_model_score": {
+            "mismatch_type_accuracy": selected_score[0],
+            "conflict_field_micro_f1": selected_score[1],
+            "exact_match_rate": selected_score[2],
+        },
         "results": results,
     }
     model_out = Path(args.model_out)

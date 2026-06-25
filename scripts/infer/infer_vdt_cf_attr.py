@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import __main__
 import json
 import pickle
 import sys
@@ -24,6 +25,13 @@ from scripts.features.build_image_caption_attribution_features import (  # noqa:
     ClipScorer,
     build_base_feature,
 )
+
+try:  # Needed for loading logreg field heads pickled by the training script.
+    from scripts.train.train_no_true_context_attribution_head import SafeFieldLogReg  # noqa: E402
+
+    setattr(__main__, "SafeFieldLogReg", SafeFieldLogReg)
+except Exception:  # pragma: no cover
+    pass
 
 _SCORER_CACHE: Dict[Tuple[str, str, bool], ClipScorer] = {}
 

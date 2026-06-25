@@ -15,7 +15,11 @@ param(
     [string]$ClipModel = "openai/clip-vit-base-patch32",
     [string]$Device = "cuda",
     [int]$BatchSize = 16,
-    [switch]$NoClip
+    [switch]$NoClip,
+    [switch]$IncludeDifferentEvent,
+    [int]$MaxDifferentEvent = 0,
+    [double]$DifferentEventMaxSimilarity = 0.65,
+    [double]$DifferentEventMaxTokenJaccard = 0.08
 )
 
 $ErrorActionPreference = "Stop"
@@ -84,6 +88,16 @@ foreach ($size in $normalizedSizes) {
         "-BatchSize", "$BatchSize"
     )
     if ($NoClip) { $args += "-NoClip" }
+    if ($IncludeDifferentEvent) {
+        $effectiveMaxDifferent = $MaxDifferentEvent
+        if ($effectiveMaxDifferent -le 0) { $effectiveMaxDifferent = $size }
+        $args += @(
+            "-IncludeDifferentEvent",
+            "-MaxDifferentEvent", "$effectiveMaxDifferent",
+            "-DifferentEventMaxSimilarity", "$DifferentEventMaxSimilarity",
+            "-DifferentEventMaxTokenJaccard", "$DifferentEventMaxTokenJaccard"
+        )
+    }
     & powershell @args
     if ($LASTEXITCODE -ne 0) {
         throw "Scaling run failed: MaxPerType=$size exit_code=$LASTEXITCODE"
@@ -125,6 +139,7 @@ foreach ($size in $normalizedSizes) {
             location_swap_count = Get-Prop $typeCounts "location_swap" 0
             time_swap_count = Get-Prop $typeCounts "time_swap" 0
             entity_swap_count = Get-Prop $typeCounts "entity_swap" 0
+            different_event_count = Get-Prop $typeCounts "different_event_original_ooc" 0
             time_swap_generated = Get-Prop $timeSummary "generated" 0
             time_swap_skipped_no_span = Get-Prop $timeSummary "skipped_no_span" 0
             uses_true_context_at_inference = Get-Prop $metrics "uses_true_context_at_inference" $false

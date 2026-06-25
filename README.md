@@ -213,6 +213,25 @@ Scaling 结果（`outputs/no_true_context_scaling_results.csv`）显示：`MaxPe
 
 解释：这个结果低于 COVE-lite oracle 是合理的，因为它不再使用真实上下文；它更能反映数据集外推理难度。
 
+五类版本：如果要加入严格筛选的原始 OOC 作为 `different-event mismatch`，运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run_no_true_context_attr_experiment.ps1 `
+  -ProjectRoot D:\MY_PROJECT\OOC\E3-VDT-OOC `
+  -Python python `
+  -MaxPerType 1000 `
+  -ContextPairs outputs\cove_lite_context_pairs_3000.jsonl `
+  -OutputDir outputs\no_true_context_attr_5way_1000 `
+  -Device cuda `
+  -BatchSize 24 `
+  -IncludeDifferentEvent `
+  -MaxDifferentEvent 1000 `
+  -DifferentEventMaxSimilarity 0.65 `
+  -DifferentEventMaxTokenJaccard 0.08
+```
+
+本地五类训练分布为 `none/entity/location/time/different-event = 1000/1000/1000/1000/987`。最好模型为 `logistic_regression_no_true_context`，test 上 **Type Acc 0.4011 / Field Micro-F1 0.5841**。其中 `different-event mismatch` 的 recall 为 0.2025，说明已经接入五类训练，但完全错配与单字段错配的区分仍需更强特征和人工真实 OOC 评测。
+
 ## 队友先看什么
 
 1. [`docs/PROJECT_NEXT_STEPS_COVE_LITE.md`](docs/PROJECT_NEXT_STEPS_COVE_LITE.md)

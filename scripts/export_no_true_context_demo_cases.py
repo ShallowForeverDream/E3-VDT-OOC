@@ -89,7 +89,7 @@ def main() -> None:
                 "demo_note": "local VisualNews counterfactual demo; no true_context is provided to inference",
             })
     selected: List[Dict[str, Any]] = []
-    preferred = ["entity mismatch", "location mismatch", "temporal mismatch", "benign illustrative image"]
+    preferred = ["entity mismatch", "location mismatch", "temporal mismatch", "different-event mismatch", "benign illustrative image"]
     while len(selected) < args.n and any(selected_by_type.values()):
         for typ in preferred + sorted(k for k in selected_by_type if k not in preferred):
             if selected_by_type.get(typ) and len(selected) < args.n:
