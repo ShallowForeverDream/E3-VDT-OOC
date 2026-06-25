@@ -24,6 +24,21 @@ def write_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+def round_robin_sample(buckets: Dict[str, List[Dict[str, Any]]], n: int, rng: random.Random) -> List[Dict[str, Any]]:
+    for rows in buckets.values():
+        rng.shuffle(rows)
+    keys = list(buckets.keys())
+    rng.shuffle(keys)
+    selected: List[Dict[str, Any]] = []
+    while len(selected) < n and any(buckets.values()):
+        for key in list(keys):
+            if len(selected) >= n:
+                break
+            if buckets[key]:
+                selected.append(buckets[key].pop())
+    return selected
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Sample candidate records for manual attribution annotation.")
     ap.add_argument("--context-pairs", required=True)
@@ -34,33 +49,36 @@ def main() -> None:
     ap.add_argument("--prefer-split", default="test")
     args = ap.parse_args()
 
-    weak_rows = read_jsonl(Path(args.weak_labels))
+    rows = read_jsonl(Path(args.weak_labels))
     rng = random.Random(args.seed)
 
-    # Prefer test split, then all rows.
-    preferred = [r for r in weak_rows if str(r.get("split", "")).lower() == args.prefer_split.lower()]
-    pool = preferred if len(preferred) >= min(args.n, 20) else weak_rows
+    preferred = [r for r in rows if str(r.get("split", "")).lower() == args.prefer_split.lower()]
+    pool = preferred if len(preferred) >= max(20, args.n // 3) else rows
 
-    # Stratify by label and weak mismatch type to avoid all samples being one type.
-    buckets: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    for r in pool:
-        key = f"label={r.get('label')}|type={r.get('weak_mismatch_type','unknown')}"
-        buckets[key].append(r)
+    ooc = [r for r in pool if r.get("label") == 1]
+    non = [r for r in pool if r.get("label") == 0]
+    other = [r for r in pool if r.get("label") not in {0, 1}]
 
-    for rows in buckets.values():
-        rng.shuffle(rows)
+    # Target a balanced annotation set: about half OOC, half Non-OOC if available.
+    n_ooc = min(len(ooc), max(args.n // 2, min(len(ooc), 10)))
+    n_non = min(len(non), args.n - n_ooc)
+    n_other = max(0, args.n - n_ooc - n_non)
+
+    def by_type(records: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        buckets: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        for r in records:
+            buckets[str(r.get("weak_mismatch_type", "unknown"))].append(r)
+        return buckets
 
     selected: List[Dict[str, Any]] = []
-    bucket_keys = list(buckets.keys())
-    rng.shuffle(bucket_keys)
-    while len(selected) < args.n and any(buckets.values()):
-        for key in list(bucket_keys):
-            if buckets[key] and len(selected) < args.n:
-                selected.append(buckets[key].pop())
+    selected.extend(round_robin_sample(by_type(ooc), n_ooc, rng))
+    selected.extend(round_robin_sample(by_type(non), n_non, rng))
+    if n_other:
+        selected.extend(round_robin_sample(by_type(other), n_other, rng))
+    rng.shuffle(selected)
 
-    # Convert to annotation template.
     out_rows: List[Dict[str, Any]] = []
-    for r in selected:
+    for r in selected[: args.n]:
         out_rows.append({
             "sample_id": r.get("sample_id", ""),
             "image_id": r.get("image_id", ""),
@@ -82,7 +100,12 @@ def main() -> None:
         })
 
     write_jsonl(Path(args.output), out_rows)
-    print(json.dumps({"output": args.output, "records": len(out_rows)}, indent=2, ensure_ascii=False))
+    print(json.dumps({
+        "output": args.output,
+        "records": len(out_rows),
+        "selected_ooc": sum(1 for r in out_rows if r.get("label") == 1),
+        "selected_non_ooc": sum(1 for r in out_rows if r.get("label") == 0),
+    }, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
