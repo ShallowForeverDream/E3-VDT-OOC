@@ -39,6 +39,22 @@ def round_robin_sample(buckets: Dict[str, List[Dict[str, Any]]], n: int, rng: ra
     return selected
 
 
+def by_type(records: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    buckets: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for r in records:
+        buckets[str(r.get("weak_mismatch_type", "unknown"))].append(r)
+    return buckets
+
+
+def enough_balance(records: List[Dict[str, Any]], n: int) -> bool:
+    if not records:
+        return False
+    ooc = sum(1 for r in records if r.get("label") == 1)
+    non = sum(1 for r in records if r.get("label") == 0)
+    # Prefer split only if it can provide a useful attribution set.
+    return len(records) >= n and ooc >= max(8, n // 4) and non >= max(8, n // 4)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Sample candidate records for manual attribution annotation.")
     ap.add_argument("--context-pairs", required=True)
@@ -53,22 +69,22 @@ def main() -> None:
     rng = random.Random(args.seed)
 
     preferred = [r for r in rows if str(r.get("split", "")).lower() == args.prefer_split.lower()]
-    pool = preferred if len(preferred) >= max(20, args.n // 3) else rows
+    if enough_balance(preferred, args.n):
+        pool = preferred
+        pool_source = f"preferred_split={args.prefer_split}"
+    else:
+        pool = rows
+        pool_source = "all_splits_fallback"
 
     ooc = [r for r in pool if r.get("label") == 1]
     non = [r for r in pool if r.get("label") == 0]
     other = [r for r in pool if r.get("label") not in {0, 1}]
 
-    # Target a balanced annotation set: about half OOC, half Non-OOC if available.
-    n_ooc = min(len(ooc), max(args.n // 2, min(len(ooc), 10)))
+    # Aim for half OOC / half Non-OOC if the pool allows it.
+    target_ooc = args.n // 2
+    n_ooc = min(len(ooc), target_ooc)
     n_non = min(len(non), args.n - n_ooc)
     n_other = max(0, args.n - n_ooc - n_non)
-
-    def by_type(records: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-        buckets: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-        for r in records:
-            buckets[str(r.get("weak_mismatch_type", "unknown"))].append(r)
-        return buckets
 
     selected: List[Dict[str, Any]] = []
     selected.extend(round_robin_sample(by_type(ooc), n_ooc, rng))
@@ -103,6 +119,10 @@ def main() -> None:
     print(json.dumps({
         "output": args.output,
         "records": len(out_rows),
+        "pool_source": pool_source,
+        "pool_size": len(pool),
+        "pool_ooc": len(ooc),
+        "pool_non_ooc": len(non),
         "selected_ooc": sum(1 for r in out_rows if r.get("label") == 1),
         "selected_non_ooc": sum(1 for r in out_rows if r.get("label") == 0),
     }, indent=2, ensure_ascii=False))
